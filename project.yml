@@ -13,11 +13,11 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    IPHONEOS_DEPLOYMENT_TARGET: "15.0" # Hạ xuống 15.0 cho an toàn
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     LM_SKIP_METADATA_EXTRACTION: YES
     GENERATE_INFOPLIST_FILE: NO
-    INFOPLIST_FILE: App/Info.plist
+    INFOPLIST_FILE: layout/GoldenNuggetMobile.app/Info.plist
     PRODUCT_BUNDLE_IDENTIFIER: com.lsnguyen.ioscustom
     PRODUCT_NAME: iOSCustomize
     CODE_SIGN_ENTITLEMENTS: entitlements.plist
@@ -38,7 +38,15 @@ targets:
     platform: iOS
     sources:
       - path: Nugget
-      - path: App
+      - path: layout/GoldenNuggetMobile.app/Assets.xcassets
+        buildPhase: resources
+      - path: layout/GoldenNuggetMobile.app/Assets.xcassets/AppIcon.icon
+        buildPhase: resources
+        createIntermediateGroups: false
+      - path: layout/GoldenNuggetMobile.app/Logo@2x.png
+        buildPhase: resources
+      - path: layout/GoldenNuggetMobile.app/Logo@1x.png
+        buildPhase: resources
     dependencies:
       - package: Minimuxer
         product: Minimuxer
