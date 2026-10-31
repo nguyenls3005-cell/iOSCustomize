@@ -12,8 +12,13 @@ xcodebuild -project iOSCustomize.xcodeproj -scheme iOSCustomize -configuration $
 echo "Packaging unsigned IPA..."
 rm -rf Payload
 mkdir Payload
+mkdir -p build
+
+# Copy đúng file .app mới build ra
 cp -R build/xderived/Build/Products/$CONFIG-iphoneos/iOSCustomize.app Payload/
 rm -rf Payload/iOSCustomize.app/_CodeSignature
-zip -r iOSCustomize.ipa Payload
 
-echo "IPA created: iOSCustomize.ipa"
+# Nén thành file IPA chuẩn
+zip -r build/iOSCustomize.ipa Payload
+
+echo "✅ IPA created at build/iOSCustomize.ipa"
