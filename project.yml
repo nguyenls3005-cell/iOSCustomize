@@ -13,7 +13,7 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    IPHONEOS_DEPLOYMENT_TARGET: "26.0" # SỬA Ở ĐÂY NÈ
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     LM_SKIP_METADATA_EXTRACTION: YES
     GENERATE_INFOPLIST_FILE: NO
@@ -33,7 +33,7 @@ settings:
       COPY_PHASE_STRIP: YES
 
 targets:
-  iOSCustomize:
+  iOSCustomize: # ĐÃ ĐỔI TÊN TỪ GoldenNuggetMobile THÀNH iOSCustomize
     type: application
     platform: iOS
     sources:
@@ -68,7 +68,7 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: ""
 
 schemes:
-  iOSCustomize:
+  iOSCustomize: # ĐỔI TÊN SCHEME LUÔN
     build:
       targets:
         iOSCustomize: all
