@@ -1,57 +1,26 @@
 import SwiftUI
 import UIKit
 
-/// The one-time setup guide: put a loopback VPN tunnel up, put a pairing record
-/// in place, then let the user in.
-///
-/// A four-slide `TabView` (art in `FirstRunArt.swift`): Welcome with live step
-/// cards, Tunnel with the values for LocalDevVPN, Pairing — the desktop app's
-/// Mobile Helper first, then import / iOS 27 self-pairing as fallbacks — and
-/// Finish. Order follows the dependency chain: the app reaches the device
-/// through the tunnel, so no tunnel → nothing for a pairing record to connect
-/// over → no device for minimuxer.
-///
-/// Both checks are ones the app can actually make: the VPN step is judged by
-/// the interface and peer probe `Tunnel` performs, the pairing step by a
-/// record at `AppPaths.pairingFile` passing the same `PairingRecord` rule the
-/// restore path applies. There is deliberately no "install" button — this
-/// target cannot install (`installation_proxy` is not bridged in), so the
-/// tunnel slide says what to install and what to type into it instead.
 struct FirstRunView: View {
-    /// Non-nil when the guide is pushed from Settings rather than the gate:
-    /// only then can the user leave without finishing setup.
     var onClose: (() -> Void)?
 
     @ObservedObject private var firstRun = FirstRunSettings.shared
-    /// Shared: the advertisement outlives this page (Settings → Developer Mode).
     @ObservedObject private var wirelessPair = WirelessPairing.shared
     @Environment(\.scenePhase) private var scenePhase
 
-    /// The tunnel step. A live probe rather than a stored answer — see `probe()`.
     @State private var tunnel: TunnelStep = .unchecked
-    /// Whether a usable pairing record is in place.
     @State private var pairingReady = PairingRecord.onDisk() != nil
     @State private var showPairingImporter = false
     @State private var errorText: String?
-    /// The slide number, swiped by the user or animated to by a step-card tap.
     @State private var page = 0
-    /// The last slide's index; `Finish` and `Skip` live below it.
     private let lastPage = 3
 
-    /// The tunnel step, as the app can actually observe it. `.peerUnreachable`
-    /// is not a failure: the interface is up, the peer service is just not
-    /// answering yet — `Tunnel.waitForTunnel` waits on exactly this.
     private enum TunnelStep: Equatable {
-        /// Not probed yet, or the last probe was interrupted.
         case unchecked
-        /// No interface carries the tunnel IP: the VPN app is not connected.
         case interfaceMissing
-        /// Interface up, peer port not answering yet.
         case peerUnreachable
-        /// The tunnel is carrying lockdown traffic — `startMinimuxer` will go on.
         case ready
 
-        /// The long verdict, carrying the values it judged — for the log.
         var text: String {
             switch self {
             case .unchecked: return "Not checked yet"
@@ -61,7 +30,6 @@ struct FirstRunView: View {
             }
         }
 
-        /// The short verdict a status pill can carry.
         var shortText: String {
             switch self {
             case .unchecked: return "Not checked yet"
@@ -88,9 +56,6 @@ struct FirstRunView: View {
         .background(FirstRunBackground())
         .navigationTitle("Set Up")
         .navigationBarTitleDisplayMode(.inline)
-        // No menu button: there is no sidebar behind this page in either state.
-        // As the gate this is the root; as a Settings page it is pushed onto a
-        // stack, where the bar already carries "back".
         .toolbar {
             if let onClose {
                 ToolbarItem(placement: .confirmationAction) {
@@ -102,17 +67,10 @@ struct FirstRunView: View {
             pairingReady = PairingRecord.onDisk() != nil
             await probe()
         }
-        // Coming back from Settings is when a tunnel that was just switched on
-        // becomes visible, and nothing in this process is told when an interface
-        // appears — so the re-check is on foreground, not only on appear.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
             await probe()
         }
-        // Re-probe until it is ready: the user's half of this step happens in
-        // another app, so this screen would otherwise sit on "no tunnel" for as
-        // long as they took. The `id` stops the loop the moment it succeeds, so a
-        // working setup costs no more probes.
         .task(id: tunnel.isReady) {
             while !tunnel.isReady, !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(5))
@@ -127,14 +85,10 @@ struct FirstRunView: View {
                 errorText = error.localizedDescription
             }
         }
-        // A pairing file arriving as a link (AirDrop, Files "Open in"), which is
-        // how it usually reaches a phone.
         .onOpenURL { url in
             guard PairingRecord.hasKnownExtension(url.pathExtension) else { return }
             importRecord(from: url)
         }
-        // The wireless pairing wrote a record of its own; adopt it through the
-        // same contract an import goes through.
         .onChange(of: wirelessPair.generatedRecordPath) { _, path in
             adoptGeneratedRecord(at: path)
         }
@@ -147,15 +101,10 @@ struct FirstRunView: View {
 
     // MARK: - Footer
 
-    /// The chrome under the slides: back, the dots, the forward action — and
-    /// on the last slide the two ways out. `Finish` lives here so it can never
-    /// be scrolled away.
     private var footer: some View {
         VStack(spacing: 12) {
             HStack {
                 if page == 0 {
-                    // The first slide's leading edge carries the exit instead of
-                    // a back button there is nothing to go back to.
                     Button("Skip setup for now") { skip() }
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -191,8 +140,6 @@ struct FirstRunView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    // Width-balances the back button so the dots stay centred on
-                    // the last slide too.
                     Color.clear
                         .frame(width: 44, height: 44)
                         .accessibilityHidden(true)
@@ -214,7 +161,6 @@ struct FirstRunView: View {
         .padding(.bottom, 8)
     }
 
-    /// One of the four dots; the live one stretches into a capsule.
     private func pageDot(_ index: Int) -> some View {
         Capsule()
             .fill(index == page ? Color.accentColor : Color(.tertiaryLabel))
@@ -226,12 +172,10 @@ struct FirstRunView: View {
 
     // MARK: - Slides
 
-    /// Slide 0: what the app does, plus the two steps as live cards that jump
-    /// to their slide — the same probes as below, one name per state.
     private var welcomeSlide: some View {
         SlideLayout(
             art: { FirstRunWelcomeArt(active: page == 0) },
-            title: "GoldenNugget",
+            title: "iOSCustomize",
             subtitle: "Restyle this iPhone's SpringBoard, status bar and daemons. Two steps stand in front of it.")
         {
             VStack(alignment: .leading, spacing: 12) {
@@ -243,13 +187,11 @@ struct FirstRunView: View {
                          status: pairingReady ? "Pairing record in place" : "No pairing record yet",
                          destination: 2)
                 NativeNote("The PC version does step 2 for you — plug this iPhone in over USB and open GoldenNugget's “Mobile Helper”.")
-                NativeNote("If the tunnel was connected after the app started, close and reopen GoldenNugget once.")
+                NativeNote("If the tunnel was connected after the app started, close and reopen iOSCustomize once.")
             }
         }
     }
 
-    /// Slide 1: the tunnel. `Tunnel.requirements` is the same string the home
-    /// page's diagnostics print, so the two cannot disagree.
     private var tunnelSlide: some View {
         SlideLayout(
             art: { FirstRunTunnelArt(ready: tunnel.isReady, active: page == 1) },
@@ -281,19 +223,15 @@ struct FirstRunView: View {
                     .buttonStyle(.bordered)
                 }
                 if tunnel == .interfaceMissing {
-                    NativeNote("No interface carries \(Tunnel.ifaceIP) — the VPN app may be "
-                        + "on the wrong network, or its tunnel IP left at default.")
+                    NativeNote("No interface carries \(Tunnel.ifaceIP) — the VPN app may be on the wrong network, or its tunnel IP left at default.")
                 }
                 if Tunnel.isCustomised {
-                    NativeSafetyNote("Custom tunnel values are in use (Tunnel settings on the "
-                        + "home page) — they must match LocalDevVPN.")
+                    NativeSafetyNote("Custom tunnel values are in use (Tunnel settings on the home page) — they must match LocalDevVPN.")
                 }
             }
         }
     }
 
-    /// Slide 2: a pairing record — the desktop app's Mobile Helper first, then
-    /// the two fallbacks (import; iOS 27 self-pairing).
     private var pairingSlide: some View {
         SlideLayout(
             art: { FirstRunPairArt(linked: pairingReady, active: page == 2) },
@@ -315,19 +253,12 @@ struct FirstRunView: View {
                                subtitle: "iOS 27+ — on iOS 26, use a file from a computer") {
                         wirelessPair.start()
                     }
-                    NativeNote("No helper? Pair on a computer (idevicepair, Sideloadly — "
-                        + "tap Trust when the phone asks), send the .mobiledevicepairing file "
-                        + "here, and import it above. The helper's “Save Pairing File to "
-                        + "Disk” works the same way.")
+                    NativeNote("No helper? Pair on a computer (idevicepair, Sideloadly — tap Trust when the phone asks), send the .mobiledevicepairing file here, and import it above. The helper's “Save Pairing File to Disk” works the same way.")
                 }
             }
         }
     }
 
-    /// The desktop app's route, as an informative card — the work happens in
-    /// another app on another machine, so it must not read as a button. Its
-    /// file lands exactly where `PairingRecord.adoptFromDisk` reads it, and
-    /// the slide's check turns green on its own after that.
     private var helperCard: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "desktopcomputer")
@@ -338,9 +269,7 @@ struct FirstRunView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("The PC version does this for you")
                     .font(.headline)
-                Text("Connect this iPhone over USB and tap Trust, then open "
-                    + "GoldenNugget on the computer — iOS → “GoldenNugget Mobile "
-                    + "Helper”. It installs the app and sends the pairing file itself.")
+                Text("Connect this iPhone over USB and tap Trust, then open GoldenNugget on the computer — iOS → “GoldenNugget Mobile Helper”. It installs the app and sends the pairing file itself.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -353,8 +282,6 @@ struct FirstRunView: View {
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// Slide 3: both verdicts and the buttons out; the confetti follows
-    /// `canFinish`, never promising a finish the button refuses.
     private var finishSlide: some View {
         SlideLayout(
             art: { FirstRunFinishArt(ready: canFinish, active: page == lastPage) },
@@ -369,8 +296,7 @@ struct FirstRunView: View {
                          working: wirelessPair.isRunning,
                          status: pairingReady ? "Pairing record in place" : "No pairing record yet",
                          destination: 2)
-                NativeNote("Finish also starts copying this device's photos and videos in the "
-                    + "background — “Restore media” on the home page puts it back after a reset.")
+                NativeNote("Finish also starts copying this device's photos and videos in the background — “Restore media” on the home page puts it back after a reset.")
                 if !canFinish {
                     NativeNote("Finish stays greyed out until both steps are ready.")
                 }
@@ -380,8 +306,6 @@ struct FirstRunView: View {
 
     // MARK: - Pieces
 
-    /// A step card (welcome/finish slides): number, name, short verdict, and a
-    /// tap that jumps to the step's slide.
     private func stepCard(number: Int, title: String, done: Bool, working: Bool,
                           status: String, destination: Int) -> some View {
         Button {
@@ -414,8 +338,6 @@ struct FirstRunView: View {
         .accessibilityHint("Opens this step's slide")
     }
 
-    /// A pairing-slide action as a full-width card (two halves truncate at
-    /// large Dynamic Type sizes).
     private func actionCard(icon: String, title: String, subtitle: String,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -445,7 +367,6 @@ struct FirstRunView: View {
         .buttonStyle(.plain)
     }
 
-    /// A step's verdict as a pill: done (green), working (orange), not yet.
     private func statusPill(done: Bool, working: Bool = false, text: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: done ? "checkmark.circle.fill" : working ? "ellipsis.circle.fill" : "circle.dashed")
@@ -459,7 +380,6 @@ struct FirstRunView: View {
         .background(.quinary, in: Capsule())
     }
 
-    /// The in-flight wireless pairing: host status, PIN if asked, cancel.
     private var wirelessCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -474,12 +394,9 @@ struct FirstRunView: View {
                 Text("PIN: \(pin)")
                     .font(.title3.monospaced().weight(.semibold))
                     .textSelection(.enabled)
-                NativeNote("Confirm it in Settings → Privacy & Security → Developer "
-                    + "Mode → “Pair with \(WirelessPairing.displayName)”.")
+                NativeNote("Confirm it in Settings → Privacy & Security → Developer Mode → “Pair with \(WirelessPairing.displayName)”.")
             } else {
-                NativeNote("Leave this open, then above on this iPhone: Settings → Privacy "
-                    + "& Security → Developer Mode → “Pair with "
-                    + "\(WirelessPairing.displayName)”.")
+                NativeNote("Leave this open, then above on this iPhone: Settings → Privacy & Security → Developer Mode → “Pair with \(WirelessPairing.displayName)”.")
             }
             Button(role: .destructive) {
                 wirelessPair.cancel()
@@ -496,33 +413,18 @@ struct FirstRunView: View {
 
     // MARK: - Actions
 
-    /// Leave the guide with both steps satisfied, and start the copy.
     private func finish() {
         firstRun.complete(reason: "tunnel and pairing record both ready")
-        // Start the photo/video copy here, while the tunnel is known to
-        // be up and the user is still on a screen that explains it. The
-        // order matters: the record is already complete, so a pull that
-        // outlives this page is not tied to it. The engine waits for
-        // minimuxer before it touches AFC, which is why this call can
-        // happen before the home page's `.task` starts it.
         GoldenNuggetEngine.shared.startAutomaticMediaPull(
             reason: "setup finished", force: true)
         onClose?()
     }
 
-    /// Leave the guide without the setup; the gate's log tells the two ways out
-    /// apart, and everything here stays reachable from Settings.
     private func skip() {
         firstRun.complete(reason: "skipped by the user")
         onClose?()
     }
 
-    /// Fill the tunnel step's state, off the main actor.
-    ///
-    /// `Task.detached` on purpose: `probePeer` waits for the peer's lockdown port,
-    /// and this runs from a view body-adjacent task that the user is scrolling —
-    /// the same two-second stall the home page's `refreshTunnelStatus()` is written
-    /// to avoid, in a place with nowhere to hide it.
     private func probe() async {
         let (interfaceUp, peerReachable) = await Task.detached(priority: .utility) {
             (Tunnel.isInterfaceUp(), Tunnel.probePeer(timeout: 1.0))
@@ -534,33 +436,18 @@ struct FirstRunView: View {
         tunnel = next
     }
 
-    /// Import a record and record it the way the home page's import does.
-    ///
-    /// The home page adopts it on its first `.task`, reading the canonical file
-    /// first — so this deliberately does **not** start anything itself: two
-    /// starters would be the duplicate-start race `startMinimuxer`'s lock was added
-    /// to prevent.
     private func importRecord(from url: URL) {
         do {
             let record = try PairingRecord.accept(contentsOf: url)
             PairingRecord.persist(record)
             pairingReady = true
-            GoldenNuggetEngine.shared.log("setup guide: pairing file imported "
-                + "(\(PairingRecord.sourceLabel(record)), \(record.count) bytes)")
+            GoldenNuggetEngine.shared.log("setup guide: pairing file imported (\(PairingRecord.sourceLabel(record)), \(record.count) bytes)")
         } catch {
             errorText = error.localizedDescription
-            GoldenNuggetEngine.shared.log("setup guide: pairing file import failed "
-                + "(\(url.lastPathComponent)): \(error.localizedDescription)")
+            GoldenNuggetEngine.shared.log("setup guide: pairing file import failed (\(url.lastPathComponent)): \(error.localizedDescription)")
         }
     }
 
-    /// Take the record the wireless pairing produced.
-    ///
-    /// Routed through `PairingRecord` either way — the library's own file is the
-    /// canonical one, so it is adopted in place rather than rewritten, and a
-    /// library that wrote somewhere else is imported like any other file. Both
-    /// paths apply `usable(_:)`, so a record produced inside the app gets the same
-    /// rejection a picked file would.
     private func adoptGeneratedRecord(at path: String?) {
         guard let path else { return }
         defer { wirelessPair.reset() }
@@ -570,21 +457,14 @@ struct FirstRunView: View {
                 : try PairingRecord.accept(contentsOf: URL(fileURLWithPath: path))
             if path != AppPaths.pairingFile.path { PairingRecord.persist(record) }
             pairingReady = true
-            GoldenNuggetEngine.shared.log("setup guide: wireless pairing record adopted "
-                + "(\(PairingRecord.sourceLabel(record)))")
+            GoldenNuggetEngine.shared.log("setup guide: wireless pairing record adopted (\(PairingRecord.sourceLabel(record)))")
         } catch {
             errorText = error.localizedDescription
-            GoldenNuggetEngine.shared.log("setup guide: wireless pairing record rejected — "
-                + "\(error.localizedDescription)")
+            GoldenNuggetEngine.shared.log("setup guide: wireless pairing record rejected — \(error.localizedDescription)")
         }
     }
 }
 
-// MARK: - Slide scaffolding
-
-/// One slide's frame: illustration, title, subtitle, then the content — which
-/// scrolls when Dynamic Type or a small phone leaves it no room, while the
-/// illustration keeps its space and stays the slide's face.
 private struct SlideLayout<Art: View, Content: View>: View {
     @ViewBuilder var art: () -> Art
     var title: LocalizedStringKey
@@ -617,9 +497,6 @@ private struct SlideLayout<Art: View, Content: View>: View {
     }
 }
 
-/// The slides' backdrop: the system background with one quiet accent wash from
-/// the top, behind every slide. Semantic colours only — the wash fades to
-/// nothing rather than to a fixed colour, so dark mode needs no second version.
 private struct FirstRunBackground: View {
     var body: some View {
         ZStack {
