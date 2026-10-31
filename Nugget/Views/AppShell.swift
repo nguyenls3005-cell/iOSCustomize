@@ -39,6 +39,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
     case presets
     case templates
     case posterBoard
+    case wallpaperDownloads // SỬA Ở ĐÂY NÈ
     case wallet
     case passcode
     case media
@@ -49,7 +50,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
 
     func allowed(by policy: HotLoadPolicy) -> Bool {
         switch self {
-        case .posterBoard: return policy.hiddenFeatures["PosterBoard"] == nil
+        case .posterBoard, .wallpaperDownloads: return policy.hiddenFeatures["PosterBoard"] == nil
         case .templates: return policy.hiddenFeatures["Templates"] == nil
         case .statusBar: return policy.hiddenFeatures["Status Bar"] == nil
         case .tweaks, .daemons: return !["Liquid Glass", "Springboard", "Internal"].allSatisfy { policy.hiddenFeatures[$0] != nil }
@@ -75,7 +76,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var showsInSidebar: Bool { self != .home }
+    var showsInSidebar: Bool { self != .home && self != .wallpaperDownloads }
     var isInMoreMenu: Bool { tab == nil && showsInSidebar }
 
     var title: String {
@@ -87,6 +88,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
         case .presets: "Presets"
         case .templates: "Templates"
         case .posterBoard: "Wallpapers"
+        case .wallpaperDownloads: "Download Wallpapers"
         case .wallet: "Wallet"
         case .passcode: "Passcode"
         case .media: "Media"
@@ -104,6 +106,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
         case .presets: "tray.2.fill"
         case .templates: "slider.horizontal.below.rectangle"
         case .posterBoard: "photo.artframe"
+        case .wallpaperDownloads: "square.and.arrow.down"
         case .wallet: "creditcard.fill"
         case .passcode: "lock.rectangle.fill"
         case .media: "photo.on.rectangle.angled"
@@ -196,7 +199,7 @@ struct RootView: View {
                 Label(AppTab.more.title, systemImage: AppTab.more.systemImage)
             }
         }
-        .tint(.orange) // Thay đổi màu chủ đạo cho nó khác biệt
+        .tint(.orange)
     }
 
     @ViewBuilder
@@ -249,6 +252,7 @@ struct RootView: View {
             case .presets: PresetManagerView(selection: $tweakSelection)
             case .templates: TemplatesView(selection: $templateSelection)
             case .posterBoard: PosterBoardView(selection: $posterBoardSelection)
+            case .wallpaperDownloads: WallpaperDownloadsView(selection: $posterBoardSelection) // NỐI VÀO ĐÂY NÈ
             case .wallet: WalletView()
             case .passcode: PasscodeThemeView()
             case .media: MediaView()
