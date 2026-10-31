@@ -2,54 +2,22 @@ import SwiftUI
 import Minimuxer
 
 /// Settings: what this build is, and the switches that change what a run does.
-///
-/// A plain `Form` in the system's grouped style.  The platform draws the
-/// surface, the section headers, the row insets, the disclosure chrome and the
-/// Liquid Glass; every colour and font here is semantic, so light and dark and
-/// the user's text size all work without a palette of our own.
-///
-/// The About half is what a bug report actually needs — version, build, and the
-/// two log files with their sizes.  The Apply half is the one switch that is not
-/// a development switch: Skip Setup.  The Development half sits behind a master
-/// switch because every row on it changes a real device.
 struct SettingsView: View {
-    // Reactive mirrors of `DevSettings.Key`, so a toggle redraws the page. The
-    // engine reads the same strings through `DevSettings.effective`.
     @AppStorage(UntestedTweaks.enabledKey) private var untestedTweaks = false
     @AppStorage(DevSettings.Key.enabled) private var devModeOn = false
     @AppStorage(DevSettings.Key.forcePartialRestore) private var forcePartialRestore = false
     @AppStorage(DevSettings.Key.verboseLog) private var verboseLog = true
     @AppStorage(DevSettings.Key.skipAfcMedia) private var skipAfcMedia = false
 
-    /// Skip Setup's switch. Observed rather than mirrored with a second
-    /// `@AppStorage` on the same key: the store is what the engine reads.
     @ObservedObject private var skipSetup = SkipSetupSettings.shared
-
-    /// Read through `engine` rather than recomputed in the body, because a log is
-    /// written by another thread while this page is open.
     @State private var logs = LogSizes()
-
-    /// The setup guide, as a full-screen cover.
-    ///
-    /// It is the same view the app opens with on a first launch, on purpose: a
-    /// second "getting started" page would be a second set of instructions to fall
-    /// out of step with the first, and the whole reason this row exists is that a
-    /// user who skipped the gate still needs it. A `NavigationLink` would have no
-    /// place to return to after "Finish setup", which on an already-set-up app
-    /// changes nothing the user can see.
     @State private var showSetupGuide = false
 
-    /// The operation history (the port of `apply_history.py` and the desktop
-    /// Settings page's *Operation History* card).  Held as loaded records and
-    /// re-read whenever the page's filters change or an operation is cleared —
-    /// the desktop re-reads the file on every refresh, and nothing else here
-    /// watches the file.
     @State private var history: [ApplyHistory.Record] = []
     @State private var historySearch = ""
     @State private var historyMode = "all"
     @State private var historyResult = "all"
 
-    /// Sizes and existence of the two files a report is built from.
     private struct LogSizes: Equatable {
         var appBytes: UInt64 = 0
         var rustBytes: UInt64 = 0
@@ -94,7 +62,7 @@ struct SettingsView: View {
         Section("About") {
             VStack(spacing: 12) {
                 NativeLogo(size: 88)
-                Text("GoldenNugget")
+                Text("iOSCustomize")
                     .font(.title2.bold())
                 Text(Self.versionText)
                     .font(.subheadline)
@@ -104,30 +72,21 @@ struct SettingsView: View {
             .padding(.vertical, 8)
             .listRowBackground(Color.clear)
 
-            // A credit, not a setting: centred and on its own, so it does not
-            // read as a row.
-            Text("Made with ❤️ by\nGoldenNugget Development Team")
+            Text("Made with ❤️ by\niOSCustomize Team")
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
 
-            NativeNote("GoldenNugget for desktop is the original this app is "
-                + "a port of. It runs the same protocols over its own Rust and Swift "
-                + "stack instead of driving pymobiledevice3, and speaks to iOS 26 and "
-                + "27 rather than only to tethered devices.")
+            NativeNote("iOSCustomize is a fork of the original GoldenNugget project. It runs the same protocols over its own Rust and Swift stack instead of driving pymobiledevice3, and speaks to iOS 26 and 27 rather than only to tethered devices.")
         }
     }
 
     // MARK: - Credits
 
-    /// What the app is built on, and by whom. Contributor links follow desktop
-    /// credits for the features used by this port. The static Rust/C archives link into the
-    /// executable rather than embedded as frameworks (only `EMProxy.framework`
-    /// ships as a dynamic framework in the IPA).
     private var creditsSection: some View {
         Section("Credits") {
-            creditRow("GoldenNugget", "Desktop app · this is a port of it",
+            creditRow("GoldenNugget", "Original Desktop app · this is a port of it",
                       systemImage: "desktopcomputer")
             creditRow("idevice", "Rust device and backup stack",
                       systemImage: "shippingbox")
@@ -149,9 +108,7 @@ struct SettingsView: View {
             contributorRow("mattisklein (Project Linwood)", "Siri AI eligibility archives", "https://github.com/mattisklein")
             contributorRow("0xjohnnydev", "AirLift", "https://github.com/0xjohnnydev")
             contributorRow("Prognosticate-X", "iOS 27 status bar research", "https://github.com/Prognosticate-X/")
-            NativeNote("The vendored copies carry local patches, listed with "
-                + "the reason for each in Vendor/patches/README.md. SideStore's minimuxer "
-                + "is © 2026 SideStore.")
+            NativeNote("The vendored copies carry local patches, listed with the reason for each in Vendor/patches/README.md. SideStore's minimuxer is © 2026 SideStore.")
         }
     }
 
@@ -173,12 +130,6 @@ struct SettingsView: View {
 
     // MARK: - Setup
 
-    /// The guide, reachable after the fact.
-    ///
-    /// Its own section rather than a row under Apply: those rows are switches a run
-    /// reads, and this one changes nothing about a run — it opens a screen. It
-    /// also sits above them, because it is the answer to "why is nothing
-    /// connecting", which is the question a user opens Settings with.
     private var setupSection: some View {
         Section("Setup") {
             Button {
@@ -186,20 +137,12 @@ struct SettingsView: View {
             } label: {
                 Label("Setup guide", systemImage: "list.number")
             }
-            NativeNote("Checks the two things this app needs before it can reach the "
-                + "device — the LocalDevVPN tunnel and a pairing record — and walks "
-                + "through both. This is the guide a first launch opens.")
+            NativeNote("Checks the two things this app needs before it can reach the device — the LocalDevVPN tunnel and a pairing record — and walks through both. This is the guide a first launch opens.")
         }
     }
 
     // MARK: - Logs
 
-    /// The evidence files and the dump built from them.
-    ///
-    /// The diagnostics rows moved here from the home page's Diagnostics section:
-    /// this is where the log files already are, and the home page's job is
-    /// Apply.  `diagnostics.txt` sits between them because it is the summary the
-    /// two raw logs feed.
     private var logsSection: some View {
         Section("Logs") {
             Button {
@@ -211,8 +154,6 @@ struct SettingsView: View {
             } label: {
                 Label("Dump diagnostics into log", systemImage: "doc.text.magnifyingglass")
             }
-            // A dump reads the device's own logs, so it cannot run while a run
-            // owns the device — the log button would just fail busy.
             .disabled(InFlightCall.shared.isRunActive)
 
             shareRow(title: "diagnostics.txt",
@@ -220,8 +161,6 @@ struct SettingsView: View {
                      systemImage: "square.and.arrow.up",
                      url: GoldenNuggetEngine.diagnosticsURL,
                      available: hasDiagnostics)
-            // The two halves of a report's evidence: this one is what the host
-            // decided, the other is what the protocol did.
             shareRow(title: "goldennugget.log",
                      size: logs.appKB,
                      systemImage: "doc.plaintext",
@@ -235,10 +174,7 @@ struct SettingsView: View {
             if !logs.hasRust, !logs.rustStatus.isEmpty {
                 NativeNote(logs.rustStatus)
             }
-            NativeNote("A report wants all three: diagnostics.txt carries the keyword "
-                + "slice of the Rust log (mobilebackup2 protocol + jktcp flow verdict) for "
-                + "the last run plus the app log's tail, the app log says what was decided, "
-                + "and minimuxer.log says what the device answered.")
+            NativeNote("A report wants all three: diagnostics.txt carries the keyword slice of the Rust log for the last run plus the app log's tail, the app log says what was decided, and minimuxer.log says what the device answered.")
         }
     }
 
@@ -259,8 +195,6 @@ struct SettingsView: View {
 
     // MARK: - Apply
 
-    /// Skip Setup, on its own page rather than behind the Development master: it is
-    /// not a switch for working around a bug, it is part of what a run writes.
     private var applySection: some View {
         Section("Apply") {
             Toggle("Enable incompatible tweaks", isOn: $untestedTweaks)
@@ -277,31 +211,18 @@ struct SettingsView: View {
         }
     }
 
-    /// What the switch does, in the order the two files are written.
     private var skipSetupNote: String {
         [
             "On by default, as upstream does. Off: an apply carries only the tweaks.",
             "On: an apply adds two files ahead of the tweaks, in this order —",
-            "1. SysSharedContainerDomain-systemgroup.com.apple.configurationprofiles/"
-                + "Library/ConfigurationProfiles/CloudConfigurationDetails.plist, "
-                + "\(SkipSetup.panes.count) setup panes marked skipped;",
+            "1. SysSharedContainerDomain-systemgroup.com.apple.configurationprofiles/Library/ConfigurationProfiles/CloudConfigurationDetails.plist, \(SkipSetup.panes.count) setup panes marked skipped;",
             "2. ManagedPreferencesDomain/mobile/com.apple.purplebuddy.plist, setup marked done.",
-            "The device's existing cloud configuration is not merged in (reading it needs "
-                + "a lockdown service this port has no path for), and no keybag certificate "
-                + "is generated.",
+            "The device's existing cloud configuration is not merged in (reading it needs a lockdown service this port has no path for), and no keybag certificate is generated.",
         ].joined(separator: "\n")
     }
 
     // MARK: - Operation History
 
-    /// The desktop Settings page's *Operation History* card
-    /// (`gui/ios/settings.py:741`): the last operations, searchable and
-    /// filterable, read from the same `operations.json` the reference writes
-    /// (`apply_history.py`).
-    ///
-    /// The desktop also reaches the preset actions from this page; here they
-    /// live on their own **Presets** page, so only the history is duplicated
-    /// from the reference's Settings.
     private var historySection: some View {
         Section("Operation History") {
             TextField("Search history…", text: $historySearch)
@@ -350,8 +271,6 @@ struct SettingsView: View {
         }
     }
 
-    /// Newest-first, filtered and searched exactly as the reference's
-    /// `_refresh_history` does (`settings.py:783`).
     private var matchingHistory: [ApplyHistory.Record] {
         let query = historySearch.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return history.reversed().filter { item in
@@ -365,7 +284,6 @@ struct SettingsView: View {
         }
     }
 
-    /// The reference caps the list at ten rows (`settings.py:804`).
     private var visibleHistory: [ApplyHistory.Record] {
         Array(matchingHistory.prefix(10))
     }
@@ -383,19 +301,14 @@ struct SettingsView: View {
         return filtered ? "No matching operations" : "No operations recorded yet"
     }
 
-    /// One row's line, in the reference's own vocabulary
-    /// (`settings.py:823`): `when • mode • device • iOS version • result`.
     private func historyRowText(_ record: ApplyHistory.Record) -> String {
         let mode = record.mode == "apply" ? "Apply" : "Reset"
         let result = record.success ? "Success" : "Failed"
         let device = record.device.isEmpty ? "Unknown device" : record.device
         let ios = record.ios.isEmpty ? "?" : record.ios
-        return "\(Self.displayTimestamp(record.timestamp))  •  \(mode)  •  "
-            + "\(device)  •  iOS \(ios)  •  \(result)"
+        return "\(Self.displayTimestamp(record.timestamp))  •  \(mode)  •  \(device)  •  iOS \(ios)  •  \(result)"
     }
 
-    /// `datetime.fromisoformat(...).strftime("%Y-%m-%d %H:%M")`, falling back to
-    /// the stored string when it is not a parseable timestamp.
     private static func displayTimestamp(_ raw: String) -> String {
         guard let date = ISO8601DateFormatter().date(from: raw) else { return raw }
         let formatter = DateFormatter()
@@ -423,23 +336,17 @@ struct SettingsView: View {
 
             if devModeOn {
                 switchRow("Force Partial Restore",
-                          note: "Takes the iOS 26 branch — a Partial Restore built "
-                              + "from nothing — even on a device that reports iOS 27+, "
-                              + "and skips the protective backup entirely.",
+                          note: "Takes the iOS 26 branch — a Partial Restore built from nothing — even on a device that reports iOS 27+, and skips the protective backup entirely.",
                           isOn: $forcePartialRestore)
 
                 switchRow("Verbose log",
                           note: verboseLog
-                            ? "Recording the protocol detail into minimuxer.log. "
-                              + "Off keeps the app log and the run itself, and drops "
-                              + "the per-frame lines."
+                            ? "Recording the protocol detail into minimuxer.log. Off keeps the app log and the run itself, and drops the per-frame lines."
                             : "Protocol detail is not being recorded. The app log still is.",
                           isOn: $verboseLog)
 
                 switchRow("Skip AFC media",
-                          note: "A run normally copies camera-roll media between the "
-                              + "backup and the prune. This leaves it out, which on a full "
-                              + "camera roll is the difference between minutes and seconds.",
+                          note: "A run normally copies camera-roll media between the backup and the prune. This leaves it out, which on a full camera roll is the difference between minutes and seconds.",
                           isOn: $skipAfcMedia)
 
                 Button("Reset switches", systemImage: "arrow.counterclockwise") {
@@ -447,16 +354,11 @@ struct SettingsView: View {
                     DevSettings.applyLoggingPreference()
                 }
 
-                NativeSafetyNote("These are switches, not fixes. Force Partial Restore "
-                    + "against a real iOS 27 device is expected to fail at the restore step, "
-                    + "because a synthesised manifest carries no domain registration.")
+                NativeSafetyNote("These are switches, not fixes. Force Partial Restore against a real iOS 27 device is expected to fail at the restore step, because a synthesised manifest carries no domain registration.")
             }
         }
     }
 
-    // MARK: - Rows
-
-    /// A labelled switch with the explanation underneath it.
     private func switchRow(_ title: String, note: String, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             VStack(alignment: .leading, spacing: 2) {
