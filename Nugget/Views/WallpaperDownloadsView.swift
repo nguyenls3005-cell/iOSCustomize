@@ -8,7 +8,7 @@ struct WallpaperDownloadsView: View {
     @State private var search = ""
 
     @State private var wallpapers: [Wallpaper] = []
-    @State private var status = "Loading wallpapers…"
+    @State private var status = "Đang tải hình nền…"
     @State private var statusTone: GoldenTone = .secondary
     @State private var error: String?
     @State private var loading = false
@@ -26,24 +26,27 @@ struct WallpaperDownloadsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                controlsCard
-                statusCard
-                if error != nil { errorCard }
-                if visible.isEmpty && !loading {
-                    emptyCard
-                } else {
-                    gridCard
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    controlsCard
+                    statusCard
+                    if error != nil { errorCard }
+                    if visible.isEmpty && !loading {
+                        emptyCard
+                    } else {
+                        gridCard
+                    }
+                    notesCard
+                    RunLogCard()
                 }
-                notesCard
-                RunLogCard()
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Download Wallpapers")
+        .tint(AppPalette.accent)
+        .navigationTitle("Tải hình nền")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -54,26 +57,20 @@ struct WallpaperDownloadsView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppPalette.accent)
                 }
-                .accessibilityLabel("Reload catalog")
+                .accessibilityLabel("Tải lại catalog")
                 .disabled(loading || importing != nil)
             }
         }
-        .task(id: LoadKey(source: source, category: category)) {
-            await load()
-        }
-        .task {
-            deviceVersion = await DeviceIdentity.read().version
-        }
+        .task(id: LoadKey(source: source, category: category)) { await load() }
+        .task { deviceVersion = await DeviceIdentity.read().version }
         .legacyConvertPrompt($legacyPrompt, answer: answerLegacyPrompt)
     }
-
-    // MARK: - Cards
 
     private var controlsCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
-                AppCardHeader(icon: "magnifyingglass", title: "Find wallpapers")
-                Picker("Source", selection: $source) {
+                AppCardHeader(icon: "magnifyingglass", title: "Tìm hình nền")
+                Picker("Nguồn", selection: $source) {
                     ForEach(WallpaperSource.allCases) { source in
                         Text(source.label).tag(source)
                     }
@@ -82,7 +79,7 @@ struct WallpaperDownloadsView: View {
                 .tint(AppPalette.accent)
 
                 if !source.categories.isEmpty {
-                    Picker("Category", selection: $category) {
+                    Picker("Danh mục", selection: $category) {
                         ForEach(source.categories) { category in
                             Text(category.label).tag(category)
                         }
@@ -93,24 +90,19 @@ struct WallpaperDownloadsView: View {
 
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search name or author", text: $search)
+                    TextField("Tìm tên hoặc tác giả", text: $search)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .nativeKeyboardDone()
                     if !search.isEmpty {
-                        Button {
-                            search = ""
-                        } label: {
+                        Button { search = "" } label: {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Clear search")
+                        }.buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color.primary.opacity(0.05),
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                .background(.regularMaterial,
                             in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous))
 
                 if loading || importing != nil {
@@ -122,8 +114,7 @@ struct WallpaperDownloadsView: View {
 
     private var statusCard: some View {
         AppCard {
-            Text(status)
-                .font(.system(size: 13))
+            Text(status).font(.footnote)
                 .foregroundStyle(statusTone.nativeColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -133,12 +124,10 @@ struct WallpaperDownloadsView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Something went wrong",
+                              title: "Có lỗi xảy ra",
                               tint: AppPalette.danger)
                 if let error {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                    Text(error).font(.footnote).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -149,10 +138,10 @@ struct WallpaperDownloadsView: View {
         AppCard {
             AppEmptyState(
                 icon: "photo.on.rectangle.angled",
-                title: wallpapers.isEmpty ? "No wallpapers found" : "Nothing matches",
+                title: wallpapers.isEmpty ? "Không tìm thấy hình nền" : "Không khớp",
                 message: wallpapers.isEmpty
-                    ? "The catalogs are community-run and one of them may be down — the other source is still listed above."
-                    : "Nothing matches “\(search.trimmingCharacters(in: .whitespacesAndNewlines))”."
+                    ? "Catalog do cộng đồng chạy, có thể một nguồn đang down — nguồn còn lại vẫn có ở trên."
+                    : "Không có kết quả cho “\(search.trimmingCharacters(in: .whitespacesAndNewlines))”."
             )
         }
     }
@@ -173,36 +162,33 @@ struct WallpaperDownloadsView: View {
     private var notesCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "info.circle", title: "About downloads")
-                NativeNote("A card downloads the wallpaper's `.tendies` pack and imports it into this app. It shows up on the PosterBoard page straight away; nothing is written to the device until you press Apply there.")
-                NativeNote("Upstream caps a selection at \(PosterBoardImports.descriptorLimit) descriptors, so an import past the cap is refused rather than silently dropped. Each pack is copied into this app — removing it on the PosterBoard page removes the copy, not the original file.")
-                NativeNote("Catalogs are cached for \(Int(WallpaperCatalog.catalogTTL / 60)) minutes; the reload button throws the cache away and asks again. Previews are cached until iOS reclaims them.")
+                AppCardHeader(icon: "info.circle", title: "Về tải xuống")
+                NativeNote("Thẻ tải bộ `.tendies` và nhập vào app. Hiện ngay trên trang Hình nền; chưa ghi vào thiết bị cho đến khi Apply ở đó.")
+                NativeNote("Upstream giới hạn selection ở \(PosterBoardImports.descriptorLimit) descriptors, nhập quá bị từ chối chứ không lặng lẽ bỏ. Mỗi bộ copy vào app — xoá ở Hình nền xoá bản copy, không xoá tệp gốc.")
+                NativeNote("Catalog cache \(Int(WallpaperCatalog.catalogTTL / 60)) phút; nút tải lại bỏ cache, hỏi mạng lại. Preview cache đến khi iOS thu hồi.")
             }
         }
     }
 
-    // MARK: - Work
-
     private func load() async {
         loading = true
         error = nil
-        status = "Loading wallpapers…"
+        status = "Đang tải hình nền…"
         statusTone = .secondary
         let result = await WallpaperCatalog.load(source: source, category: category)
         wallpapers = result.wallpapers
         loading = false
 
         if result.wallpapers.isEmpty {
-            status = result.failures.isEmpty ? "No wallpapers found" : "Failed to load wallpapers"
+            status = result.failures.isEmpty ? "Không tìm thấy hình nền" : "Tải thất bại"
             statusTone = result.failures.isEmpty ? .secondary : .error
         } else {
-            status = "\(result.wallpapers.count) wallpapers"
+            status = "\(result.wallpapers.count) hình nền"
                 + (result.failures.isEmpty ? "" : " (\(result.failures.joined(separator: "; ")))")
             statusTone = result.failures.isEmpty ? .secondary : .warning
         }
         for failure in result.failures { RunLog.shared.append("Wallpapers: \(failure)") }
-        RunLog.shared.append("Wallpapers: \(result.wallpapers.count) from "
-            + "\(source.label)\(result.fromCache ? " (cached)" : "")")
+        RunLog.shared.append("Wallpapers: \(result.wallpapers.count) từ \(source.label)\(result.fromCache ? " (cache)" : "")")
     }
 
     private func reload() {
@@ -218,7 +204,7 @@ struct WallpaperDownloadsView: View {
         guard importing == nil else { return }
         importing = wallpaper.id
         error = nil
-        status = "Downloading \(wallpaper.name)…"
+        status = "Đang tải \(wallpaper.name)…"
         statusTone = .secondary
 
         Task {
@@ -227,7 +213,7 @@ struct WallpaperDownloadsView: View {
             do {
                 file = try await WallpaperCatalog.download(wallpaper)
             } catch {
-                fail("\(wallpaper.name) could not be downloaded: \(error.localizedDescription)")
+                fail("\(wallpaper.name) tải thất bại: \(error.localizedDescription)")
                 return
             }
             do {
@@ -235,21 +221,17 @@ struct WallpaperDownloadsView: View {
                 let pack = try PosterBoardImports.import(from: file)
                 guard existing + pack.descriptorCount <= PosterBoardImports.descriptorLimit else {
                     PosterBoardImports.remove(pack)
-                    throw GoldenNuggetError("\(pack.name) carries \(pack.descriptorCount) "
-                        + "descriptor(s), which would take the selection to "
-                        + "\(existing + pack.descriptorCount). PosterBoard's picker gets "
-                        + "unusable past \(PosterBoardImports.descriptorLimit) — remove a pack "
-                        + "on the PosterBoard page first.")
+                    throw GoldenNuggetError("\(pack.name) chứa \(pack.descriptorCount) descriptor, đưa selection lên \(existing + pack.descriptorCount). Picker PosterBoard không dùng được quá \(PosterBoardImports.descriptorLimit) — xoá bộ trên trang Hình nền trước.")
                 }
                 selection.loadFromDisk()
-                status = "Imported \(wallpaper.name)"
+                status = "Đã nhập \(wallpaper.name)"
                 statusTone = .success
-                RunLog.shared.append("Wallpapers: imported \(pack.name) (\(pack.summary)) from \(wallpaper.sourceLabel)")
+                RunLog.shared.append("Wallpapers: đã nhập \(pack.name) (\(pack.summary)) từ \(wallpaper.sourceLabel)")
                 if let prompt = pack.legacyConvertPrompt(deviceVersion: deviceVersion) {
                     legacyPrompt = prompt
                 }
             } catch {
-                fail("Could not import \(wallpaper.name): \(error.localizedDescription)")
+                fail("Không nhập được \(wallpaper.name): \(error.localizedDescription)")
             }
             try? FileManager.default.removeItem(at: file)
         }
@@ -257,7 +239,7 @@ struct WallpaperDownloadsView: View {
 
     private func fail(_ message: String) {
         error = message
-        status = "Import failed"
+        status = "Nhập thất bại"
         statusTone = .error
         RunLog.shared.append("Wallpapers: \(message)")
     }
@@ -267,8 +249,8 @@ struct WallpaperDownloadsView: View {
         _ = prompt.pack.settingAutoConvert(convert)
         selection.loadFromDisk()
         RunLog.shared.append(convert
-            ? "Wallpapers: \(prompt.pack.name) will be converted to the modern format on Apply (legacy: \(prompt.families.joined(separator: ", ")))."
-            : "Wallpapers: \(prompt.pack.name) stays in its original legacy format (\(prompt.families.joined(separator: ", "))).")
+            ? "Wallpapers: \(prompt.pack.name) sẽ chuyển sang định dạng mới khi Apply (legacy: \(prompt.families.joined(separator: ", ")))."
+            : "Wallpapers: \(prompt.pack.name) giữ nguyên định dạng cũ (\(prompt.families.joined(separator: ", "))).")
     }
 }
 
@@ -293,13 +275,10 @@ private struct WallpaperCard: View {
                 preview
                 Text(wallpaper.name)
                     .font(.system(size: 11, weight: .semibold))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
+                    .multilineTextAlignment(.center).lineLimit(2)
                     .frame(height: 32, alignment: .top)
                 Text(wallpaper.byline)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
             }
         }
         .buttonStyle(.plain)
@@ -329,8 +308,7 @@ private struct WallpaperCard: View {
                 }
             } else if failed {
                 Image(systemName: "photo.badge.exclamationmark")
-                    .font(.title)
-                    .foregroundStyle(.tertiary)
+                    .font(.title).foregroundStyle(.tertiary)
             } else {
                 ProgressView().scaleEffect(0.8).tint(AppPalette.accent)
             }
@@ -345,9 +323,7 @@ private struct WallpaperCard: View {
 
     @ViewBuilder
     private func image(_ image: UIImage?) -> some View {
-        if let image {
-            Image(uiImage: image).resizable().scaledToFit()
-        }
+        if let image { Image(uiImage: image).resizable().scaledToFit() }
     }
 
     private func loadPreview() async {
