@@ -78,6 +78,7 @@ struct HomeView: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .tint(AppPalette.accent)
         .navigationTitle("iOSCustomize")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(navBarVisibility, for: .navigationBar)
@@ -246,7 +247,7 @@ struct HomeView: View {
     private var progressRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             ProgressView(value: progress ?? 0, total: 100)
-                .tint(.accentColor)
+                .tint(AppPalette.accent)
                 .opacity(progress == nil ? 0.3 : 1)
             HStack {
                 Text(progress == nil ? "Working…" : "\(Int(progress ?? 0))%")
@@ -283,7 +284,7 @@ struct HomeView: View {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 10, weight: .bold))
                             }
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(AppPalette.accent)
                         }
                         .buttonStyle(.plain)
                     )
@@ -363,7 +364,7 @@ struct HomeView: View {
                               ? "checkmark.seal.fill"
                               : "doc.badge.plus")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(paired ? Color.green : Color.accentColor)
+                            .foregroundStyle(paired ? Color.green : AppPalette.accent)
                         Text(paired ? "Pairing & tunnel" : "Pair the device")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
@@ -525,8 +526,8 @@ struct HomeView: View {
                 AppButton(
                     title: "Reset tweaks to stock",
                     systemImage: "arrow.counterclockwise",
-                    destructive: true,
-                    disabled: running || resetting
+                    disabled: running || resetting,
+                    destructive: true
                 ) {
                     showResetSheet = true
                 }
