@@ -2,11 +2,10 @@ import Foundation
 
 // MARK: - iOS 27 NSKeyedArchiver classes
 //
-// Dựa trên research của Prognosticate-X, SpringBoard iOS 27 đọc file
-// StatusBarOverrides.archive dưới dạng NSKeyedArchiver binary plist.
-// Các class dưới đây implement NSCoding để NSKeyedArchiver sinh ra đúng
-// cấu trúc $objects, $top, $archiver mà hệ thống mong đợi.
+// LỖI CŨ: 'private class has an unstable name when archiving via NSCoding'.
+// GIẢI PHÁP: Thêm @objc(TênClass) để gán tên runtime ObjC cố định.
 
+@objc(_SBSystemStatusStatusBarOverridesArchiveRecord)
 private class SBStatusBarOverridesArchiveRecord: NSObject, NSCoding {
     let statusBarData: STStatusBarData
     let suppressedBackgroundActivityIdentifiers: NSSet
@@ -24,6 +23,7 @@ private class SBStatusBarOverridesArchiveRecord: NSObject, NSCoding {
     }
 }
 
+@objc(STStatusBarData)
 private class STStatusBarData: NSObject, NSCoding {
     var cellularEntry: STStatusBarDataCellularEntry?
     var secondaryCellularEntry: STStatusBarDataCellularEntry?
@@ -37,6 +37,7 @@ private class STStatusBarData: NSObject, NSCoding {
     }
 }
 
+@objc(STStatusBarDataCellularEntry)
 private class STStatusBarDataCellularEntry: NSObject, NSCoding {
     var string: String?
     var crossfadeString: String?
@@ -65,10 +66,10 @@ private class STStatusBarDataCellularEntry: NSObject, NSCoding {
 // MARK: - Builder
 
 enum StatusBarArchiveBuilder {
-    /// Tạo archive từ StatusBarSelection hiện tại.
-    static func build(from selection: StatusBarSelection) throws -> Data {
+    /// Tạo archive từ StatusBarOverrides hiện tại.
+    static func build(from overrides: StatusBarOverrides) throws -> Data {
         let record = SBStatusBarOverridesArchiveRecord(
-            statusBarData: buildStatusBarData(from: selection),
+            statusBarData: buildStatusBarData(from: overrides),
             suppressed: NSSet()
         )
 
@@ -99,37 +100,37 @@ enum StatusBarArchiveBuilder {
         return archiver.encodedData
     }
 
-    private static func buildStatusBarData(from selection: StatusBarSelection) -> STStatusBarData {
+    private static func buildStatusBarData(from overrides: StatusBarOverrides) -> STStatusBarData {
         let data = STStatusBarData()
 
-        if selection.overrides.carrierName.set {
+        if overrides.carrierName.set {
             let entry = STStatusBarDataCellularEntry()
-            entry.string = selection.overrides.carrierName.text
-            entry.crossfadeString = selection.overrides.carrierName.text
-            if selection.overrides.serviceBadge.set {
-                entry.badgeString = selection.overrides.serviceBadge.text
+            entry.string = overrides.carrierName.text
+            entry.crossfadeString = overrides.carrierName.text
+            if overrides.serviceBadge.set {
+                entry.badgeString = overrides.serviceBadge.text
             }
-            if selection.overrides.signalBars.set {
-                entry.displayValue = selection.overrides.signalBars.value
+            if overrides.signalBars.set {
+                entry.displayValue = overrides.signalBars.value
             }
-            if selection.overrides.dataNetworkType.set {
-                entry.type = selection.overrides.dataNetworkType.value
+            if overrides.dataNetworkType.set {
+                entry.type = overrides.dataNetworkType.value
             }
             data.cellularEntry = entry
         }
 
-        if selection.overrides.secondaryCarrierName.set {
+        if overrides.secondaryCarrierName.set {
             let entry = STStatusBarDataCellularEntry()
-            entry.string = selection.overrides.secondaryCarrierName.text
-            entry.crossfadeString = selection.overrides.secondaryCarrierName.text
-            if selection.overrides.secondaryServiceBadge.set {
-                entry.badgeString = selection.overrides.secondaryServiceBadge.text
+            entry.string = overrides.secondaryCarrierName.text
+            entry.crossfadeString = overrides.secondaryCarrierName.text
+            if overrides.secondaryServiceBadge.set {
+                entry.badgeString = overrides.secondaryServiceBadge.text
             }
-            if selection.overrides.secondarySignalBars.set {
-                entry.displayValue = selection.overrides.secondarySignalBars.value
+            if overrides.secondarySignalBars.set {
+                entry.displayValue = overrides.secondarySignalBars.value
             }
-            if selection.overrides.secondaryDataNetworkType.set {
-                entry.type = selection.overrides.secondaryDataNetworkType.value
+            if overrides.secondaryDataNetworkType.set {
+                entry.type = overrides.secondaryDataNetworkType.value
             }
             data.secondaryCellularEntry = entry
         }
