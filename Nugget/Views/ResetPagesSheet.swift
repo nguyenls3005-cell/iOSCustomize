@@ -12,32 +12,35 @@ struct ResetPagesSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: AppPalette.sGap) {
-                    pagesCard
-                    touchedCard
-                    procedureCard
+            ZStack {
+                AppBackdrop()
+                ScrollView {
+                    LazyVStack(spacing: AppPalette.sGap) {
+                        pagesCard
+                        touchedCard
+                        procedureCard
+                    }
+                    .padding(.horizontal, AppPalette.sScreen)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, AppPalette.sScreen)
-                .padding(.vertical, 12)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Reset Page Tweaks")
+            .tint(AppPalette.accent)
+            .navigationTitle("Đặt lại trang Tweak")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Huỷ") {
                         selection.removeAll()
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Reset", role: .destructive) {
+                    Button("Đặt lại", role: .destructive) {
                         let pages = selection
                         dismiss()
                         onReset(pages)
                     }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(selection.isEmpty || isRunning
                                      ? Color.secondary
                                      : AppPalette.danger)
@@ -45,25 +48,22 @@ struct ResetPagesSheet: View {
                 }
             }
         }
-        .tint(AppPalette.accent)
         .presentationDetents([.medium, .large])
     }
 
     private var pagesCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "checklist", title: "Pages to reset")
-                NativeNote("Select the pages you would like to reset.")
+                AppCardHeader(icon: "checklist", title: "Trang cần đặt lại")
+                NativeNote("Chọn các trang muốn reset.")
                 AppDivider()
                 ForEach(Array(ResetPage.allCases.enumerated()), id: \.element) { idx, page in
                     Toggle(isOn: binding(for: page)) {
                         HStack {
-                            Text(page.title)
-                                .font(.system(size: 15, weight: .medium))
+                            Text(page.title).font(.subheadline.weight(.medium))
                             Spacer()
                             Text(fileCount(page))
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(.secondary)
                         }
                     }
                     .tint(AppPalette.success)
@@ -76,14 +76,12 @@ struct ResetPagesSheet: View {
     @ViewBuilder
     private var touchedCard: some View {
         if plan.targets.isEmpty {
-            AppCard {
-                NativeNote("Nothing selected yet.")
-            }
+            AppCard { NativeNote("Chưa chọn gì.") }
         } else {
             AppCard {
                 VStack(alignment: .leading, spacing: 8) {
                     AppCardHeader(icon: "doc.on.doc",
-                                  title: "Writes \(plan.targets.count) file(s)")
+                                  title: "Ghi \(plan.targets.count) tệp")
                     ForEach(plan.targets) { target in
                         HStack(spacing: 8) {
                             Image(systemName: "doc")
@@ -92,8 +90,7 @@ struct ResetPagesSheet: View {
                             Text("\(shortPath(target.path)) · \(target.kind.rawValue)")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                                .lineLimit(1).truncationMode(.middle)
                         }
                     }
                 }
@@ -106,19 +103,19 @@ struct ResetPagesSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(
                     icon: "info.circle",
-                    title: "Procedure",
+                    title: "Cách làm",
                     tint: isIOS27 ? AppPalette.warning : AppPalette.accent
                 )
                 if isIOS27 {
-                    NativeSafetyNote("iOS \(deviceVersion): each nulled file is written as a valid empty plist, not 0 bytes. A 0-byte plist is a truncated plist on this release and crashes SpringBoard at boot. An empty plist parses, and the system falls back to its own defaults.")
+                    NativeSafetyNote("iOS \(deviceVersion): mỗi tệp null được ghi thành plist rỗng hợp lệ, không phải 0 byte. Plist 0 byte bị coi là truncated trên bản này và làm SpringBoard crash lúc boot. Plist rỗng parse được, hệ thống fallback về default.")
                 } else {
-                    NativeNote("Each nulled file is written as 0 bytes, which makes the daemon that reads it fall back to its defaults.")
+                    NativeNote("Mỗi tệp null ghi 0 byte, khiến daemon đọc nó fallback default.")
                 }
-                NativeNote("Nothing is read back from the device first: no original values are captured, so a file that was already custom before an apply is put back to its default rather than to what it held. The daemon list is the exception — it is written with the six entries a stock device ships. The selections in this app are left alone; applying again writes the tweaks back.")
-                NativeNote("The Status Bar reset is the one file here that is written whole, not nulled: a fresh, all-default "
-                    + (isIOS27 ? "StatusBarOverrides.archive with no cellular entries, which SpringBoard decodes as \"no overrides\"."
-                        : "statusBarOverrides struct, so every override reads as off.")
-                    + " It goes through the same mechanism the Status Bar page applies with.")
+                NativeNote("Không đọc lại từ thiết bị trước: không giữ giá trị gốc, nên tệp đã custom trước Apply sẽ về default chứ không về đúng giá trị cũ. Daemon list là ngoại lệ — ghi 6 entry stock. Lựa chọn trong app giữ nguyên; Apply lại sẽ ghi tweak trở lại.")
+                NativeNote("Reset Status Bar là tệp duy nhất ghi nguyên vẹn: "
+                    + (isIOS27 ? "StatusBarOverrides.archive mới với không cellular entry, SpringBoard decode là \"không override\"."
+                        : "statusBarOverrides struct mới, mọi override đọc là tắt.")
+                    + " Đi qua cùng cơ chế với trang Status Bar.")
             }
         }
     }
@@ -130,7 +127,7 @@ struct ResetPagesSheet: View {
 
     private func fileCount(_ page: ResetPage) -> String {
         let count = page.locations.count
-        return count == 1 ? "1 file" : "\(count) files"
+        return count == 1 ? "1 tệp" : "\(count) tệp"
     }
 
     private func shortPath(_ path: String) -> String {
