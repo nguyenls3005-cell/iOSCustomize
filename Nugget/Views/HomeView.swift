@@ -63,21 +63,25 @@ struct HomeView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                heroCard
-                applyCard
-                mediaCard
-                connectionCard
-                resetCard
-                if !status.isEmpty { statusCard }
-                if !runLog.lines.isEmpty { logCard }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    heroCard
+                    metricRow
+                    applyCard
+                    quickActionsCard
+                    if !status.isEmpty { statusCard }
+                    connectionCard
+                    mediaCard
+                    resetCard
+                    if !runLog.lines.isEmpty { logCard }
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
         .tint(AppPalette.accent)
         .navigationTitle("iOSCustomize")
         .navigationBarTitleDisplayMode(.inline)
@@ -141,16 +145,13 @@ struct HomeView: View {
     }
 
     // MARK: - Hero
-    //
-    // Thẻ đầu trang: logo, tên, mô tả thiết bị, nút làm mới, hai chip
-    // trạng thái. Không icon badge tròn — chỉ logo + chữ + chip material.
 
     private var heroCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .center, spacing: 14) {
-                    NativeLogo(size: 52)
-                        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+                    NativeLogo(size: 54)
+                        .shadow(color: .black.opacity(0.2), radius: 12, y: 6)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("iOSCustomize")
                             .font(.title3.weight(.bold))
@@ -168,22 +169,11 @@ struct HomeView: View {
                         }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(AppPalette.accent)
+                            .font(.system(size: 14, weight: .semibold))
                             .frame(width: 34, height: 34)
-                            .background(
-                                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                                    .fill(.ultraThinMaterial)
-                            )
-                            .rotationEffect(.degrees(readingDevice ? 360 : 0))
-                            .animation(
-                                readingDevice
-                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
-                                    : .default,
-                                value: readingDevice
-                            )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
+                    .tint(AppPalette.accent)
                     .disabled(!(paired && !readingDevice))
                 }
                 HStack(spacing: 8) {
@@ -211,29 +201,74 @@ struct HomeView: View {
         return ("Đã kết nối", .success)
     }
 
+    // MARK: - Metric row (3 ô)
+
+    private var metricRow: some View {
+        HStack(spacing: 10) {
+            MetricTile(
+                icon: "antenna.radiowaves.left.and.right",
+                label: "Đường hầm",
+                value: paired ? "BẬT" : "TẮT",
+                tone: paired ? .success : .secondary
+            )
+            MetricTile(
+                icon: "slider.horizontal.3",
+                label: "Tinh chỉnh",
+                value: "\(tweakSelection.enabledCount)",
+                tone: tweakSelection.enabledCount > 0 ? .accent : .secondary
+            )
+            MetricTile(
+                icon: "iphone.gen3",
+                label: "Thiết bị",
+                value: identity.version.isEmpty ? "—" : identity.version,
+                tone: identity.version.isEmpty ? .warning : .success
+            )
+        }
+    }
+
     // MARK: - Apply
 
     private var applyCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 AppCardHeader(icon: "bolt.fill", title: "Áp dụng")
-                AppButton(
-                    title: running ? "Đang áp dụng…" : applyTitle,
-                    systemImage: running ? nil : "bolt.fill",
-                    running: running,
-                    disabled: !canApply
-                ) {
+                Button {
                     applyTweaks()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: running ? "hourglass" : "bolt.fill")
+                            .font(.system(size: 18, weight: .bold))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(running ? "Đang áp dụng…" : applyTitle)
+                                .font(.headline)
+                            Text(canApply ? "Chạm để chạy một lượt" : "Chưa có gì để áp dụng")
+                                .font(.caption)
+                                .opacity(0.85)
+                        }
+                        Spacer()
+                    }
                 }
+                .buttonStyle(.glassProminent)
+                .tint(AppPalette.accent)
+                .controlSize(.large)
+                .disabled(!canApply)
+
                 if running {
                     progressRow
-                    AppButton(
-                        title: "Dừng chạy",
-                        systemImage: "stop.fill",
-                        destructive: true
-                    ) {
+                    Button {
                         GoldenNuggetEngine.shared.requestCancel()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("Dừng chạy")
+                                .font(.callout.weight(.semibold))
+                        }
+                        .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.glassProminent)
+                    .tint(AppPalette.danger)
+                    .controlSize(.large)
                 }
                 NativeNote(applyNote)
             }
@@ -257,92 +292,39 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Media
+    // MARK: - Quick actions
 
-    private struct MediaTotals: Equatable {
-        var files: Int
-        var bytes: Int64
-    }
-
-    private var mediaCard: some View {
+    private var quickActionsCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
-                AppCardHeader(
-                    icon: "photo.on.rectangle.angled",
-                    title: "Phương tiện",
-                    trailing: AnyView(
-                        Button {
-                            openDestination(.media)
-                        } label: {
-                            HStack(spacing: 2) {
-                                Text("Quản lý")
-                                    .font(.footnote.weight(.semibold))
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundStyle(AppPalette.accent)
-                        }
-                        .buttonStyle(.plain)
-                    )
-                )
-                if let totals = mediaTotals, totals.files > 0 {
-                    Text("\(totals.files) tệp · "
-                        + ByteCountFormatter.string(fromByteCount: totals.bytes, countStyle: .file))
-                        .font(.subheadline)
-                } else {
-                    Text("Chưa có ảnh hoặc video nào")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                AppButton(
-                    title: restoringMedia ? "Đang khôi phục…" : "Khôi phục phương tiện",
-                    systemImage: "arrow.uturn.backward.circle",
-                    running: restoringMedia,
-                    disabled: !canRestoreMedia
-                ) {
-                    restoreMedia()
+                AppCardHeader(icon: "square.grid.2x2.fill", title: "Truy cập nhanh")
+                HStack(spacing: 10) {
+                    quickTile(icon: "slider.horizontal.3", label: "Tinh chỉnh", dest: .tweaks)
+                    quickTile(icon: "gearshape.2.fill", label: "Daemons", dest: .daemons)
+                    quickTile(icon: "photo.artframe", label: "Hình nền", dest: .posterBoard)
+                    quickTile(icon: "antenna.radiowaves.left.and.right", label: "Status", dest: .statusBar)
                 }
             }
         }
     }
 
-    private var canRestoreMedia: Bool {
-        paired && !running && !resetting && !restoringMedia && (mediaTotals?.files ?? 0) > 0
-    }
-
-    private func refreshMediaTotals() {
-        Task {
-            let totals = await Task.detached { AfcMediaBackup.storeTotals() }.value
-            await MainActor.run {
-                mediaTotals = totals.map { MediaTotals(files: $0.files, bytes: $0.bytes) }
+    private func quickTile(icon: String, label: String, dest: AppDestination) -> some View {
+        Button {
+            openDestination(dest)
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
         }
-    }
-
-    private func restoreMedia() {
-        restoringMedia = true
-        RunLog.shared.clear()
-        showStatus("Đang khôi phục phương tiện…", .accent, autoHide: false)
-        Task {
-            var text = ""
-            var tone: GoldenTone = .primary
-            do {
-                try await GoldenNuggetEngine.shared.restoreMedia()
-                text = "Đã khôi phục phương tiện lên thiết bị."
-                tone = .success
-            } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ đã dừng (\(failure.label))"
-                tone = .warning
-            } catch {
-                text = "❌ \(error.localizedDescription)"
-                tone = .error
-            }
-            await MainActor.run {
-                restoringMedia = false
-                showStatus(text, tone)
-                refreshMediaTotals()
-            }
-        }
+        .buttonStyle(.glass)
+        .tint(AppPalette.accent)
+        .controlSize(.regular)
     }
 
     // MARK: - Connection
@@ -401,26 +383,24 @@ struct HomeView: View {
     @ViewBuilder
     private var pairingRows: some View {
         if paired {
-            Button {
+            AppButton(title: "Đặt lại tệp ghép nối",
+                      systemImage: "arrow.counterclockwise",
+                      destructive: true,
+                      prominent: false) {
                 resetPairing()
-            } label: {
-                Label("Đặt lại tệp ghép nối", systemImage: "arrow.counterclockwise")
-                    .font(.subheadline)
             }
         } else if wirelessPair.isRunning {
             wirelessPairProgress
         } else {
-            Button {
+            AppButton(title: "Chọn tệp ghép nối",
+                      systemImage: "doc.badge.plus",
+                      prominent: false) {
                 showPairingImporter.toggle()
-            } label: {
-                Label("Chọn tệp ghép nối", systemImage: "doc.badge.plus")
-                    .font(.subheadline)
             }
-            Button {
+            AppButton(title: "Ghép nối không dây",
+                      systemImage: "wifi",
+                      prominent: false) {
                 wirelessPair.start()
-            } label: {
-                Label("Ghép nối không dây", systemImage: "wifi")
-                    .font(.subheadline)
             }
             if case .failed(let message) = wirelessPair.phase {
                 NativeSafetyNote(message)
@@ -446,12 +426,11 @@ struct HomeView: View {
             } else {
                 NativeNote("Giữ màn hình này mở, rồi vào Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển trên iPhone này.")
             }
-            Button(role: .destructive) {
+            AppButton(title: "Huỷ ghép nối",
+                      systemImage: "xmark.circle",
+                      destructive: true,
+                      prominent: false) {
                 wirelessPair.cancel()
-            } label: {
-                Label("Huỷ ghép nối", systemImage: "xmark.circle")
-                    .font(.footnote)
-                    .foregroundStyle(AppPalette.danger)
             }
         }
     }
@@ -460,52 +439,36 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Địa chỉ đường hầm").font(.subheadline.weight(.semibold))
             NativeNote("Cách app này tìm đường hầm LocalDevVPN. Chỉ ảnh hưởng app này.")
-            VStack(alignment: .leading, spacing: 4) {
-                Text("IP đường hầm (thiết bị này)").font(.caption).foregroundStyle(.secondary)
-                TextField("IP đường hầm", text: $tunnelIfaceIP)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numbersAndPunctuation)
-                if !tunnelIfaceIPOK { NativeSafetyNote("IPv4 không hợp lệ.") }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("IP đối tác (máy chủ VPN)").font(.caption).foregroundStyle(.secondary)
-                TextField("IP đối tác", text: $tunnelPeerIP)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numbersAndPunctuation)
-                if !tunnelPeerIPOK { NativeSafetyNote("IPv4 không hợp lệ.") }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Cổng Lockdown").font(.caption).foregroundStyle(.secondary)
-                TextField("Cổng", text: $tunnelPort)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numberPad)
-                    .nativeKeyboardDone()
-                if !tunnelPortOK { NativeSafetyNote("Cổng không hợp lệ.") }
-            }
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Độ dài tiền tố IP").font(.caption).foregroundStyle(.secondary)
-                TextField("Tiền tố", text: $tunnelPrefixLength)
-                    .textFieldStyle(.roundedBorder)
-                    .keyboardType(.numberPad)
-                    .nativeKeyboardDone()
-                if !tunnelPrefixOK { NativeSafetyNote("Tiền tố không hợp lệ.") }
-            }
+            tunnelField("IP đường hầm (thiết bị này)", text: $tunnelIfaceIP, valid: tunnelIfaceIPOK)
+            tunnelField("IP đối tác (máy chủ VPN)", text: $tunnelPeerIP, valid: tunnelPeerIPOK)
+            tunnelField("Cổng Lockdown", text: $tunnelPort, valid: tunnelPortOK, numberPad: true)
+            tunnelField("Độ dài tiền tố IP", text: $tunnelPrefixLength, valid: tunnelPrefixOK, numberPad: true)
             NativeNote("Chép vào LocalDevVPN: tunnel \(Tunnel.ifaceIP)/\(Tunnel.ifacePrefixLength), peer \(Tunnel.peerIP), cổng \(Tunnel.servicePort).")
             Text("tunnel: \(tunnelSummary) · peer \(Tunnel.peerIP):\(Tunnel.servicePort) reachable: \(peerReachable.map(String.init) ?? "…")")
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Button {
+            AppButton(title: "Đặt lại mặc định",
+                      systemImage: "arrow.counterclockwise",
+                      prominent: false) {
                 Tunnel.resetToDefaults()
                 tunnelIfaceIP = Tunnel.defaultIfaceIP
                 tunnelPeerIP = Tunnel.defaultPeerIP
                 tunnelPort = String(Tunnel.defaultServicePort)
                 tunnelPrefixLength = String(Tunnel.defaultPrefixLength)
                 Task { await refreshTunnelStatus() }
-            } label: {
-                Label("Đặt lại mặc định", systemImage: "arrow.counterclockwise")
-                    .font(.footnote)
             }
+        }
+    }
+
+    private func tunnelField(_ label: String, text: Binding<String>, valid: Bool, numberPad: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            TextField(label, text: text)
+                .textFieldStyle(.roundedBorder)
+                .keyboardType(numberPad ? .numberPad : .numbersAndPunctuation)
+                .modifier(ConditionalNativeKeyboardDone(enabled: numberPad))
+            if !valid { NativeSafetyNote("Giá trị không hợp lệ.") }
         }
     }
 
@@ -513,6 +476,95 @@ struct HomeView: View {
     private var tunnelPeerIPOK: Bool { Tunnel.isValidIPv4(tunnelPeerIP) != nil }
     private var tunnelPortOK: Bool { Tunnel.validPort(tunnelPort) != nil }
     private var tunnelPrefixOK: Bool { Tunnel.validPrefixLength(tunnelPrefixLength) != nil }
+
+    // MARK: - Media
+
+    private struct MediaTotals: Equatable {
+        var files: Int
+        var bytes: Int64
+    }
+
+    private var mediaCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                AppCardHeader(
+                    icon: "photo.on.rectangle.angled",
+                    title: "Phương tiện",
+                    trailing: AnyView(
+                        Button {
+                            openDestination(.media)
+                        } label: {
+                            HStack(spacing: 2) {
+                                Text("Quản lý")
+                                    .font(.footnote.weight(.semibold))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundStyle(AppPalette.accent)
+                        }
+                        .buttonStyle(.plain)
+                    )
+                )
+                if let totals = mediaTotals, totals.files > 0 {
+                    Text("\(totals.files) tệp · "
+                        + ByteCountFormatter.string(fromByteCount: totals.bytes, countStyle: .file))
+                        .font(.subheadline)
+                } else {
+                    Text("Chưa có ảnh hoặc video nào")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                AppButton(
+                    title: restoringMedia ? "Đang khôi phục…" : "Khôi phục phương tiện",
+                    systemImage: "arrow.uturn.backward.circle",
+                    running: restoringMedia,
+                    disabled: !canRestoreMedia,
+                    prominent: false
+                ) {
+                    restoreMedia()
+                }
+            }
+        }
+    }
+
+    private var canRestoreMedia: Bool {
+        paired && !running && !resetting && !restoringMedia && (mediaTotals?.files ?? 0) > 0
+    }
+
+    private func refreshMediaTotals() {
+        Task {
+            let totals = await Task.detached { AfcMediaBackup.storeTotals() }.value
+            await MainActor.run {
+                mediaTotals = totals.map { MediaTotals(files: $0.files, bytes: $0.bytes) }
+            }
+        }
+    }
+
+    private func restoreMedia() {
+        restoringMedia = true
+        RunLog.shared.clear()
+        showStatus("Đang khôi phục phương tiện…", .accent, autoHide: false)
+        Task {
+            var text = ""
+            var tone: GoldenTone = .primary
+            do {
+                try await GoldenNuggetEngine.shared.restoreMedia()
+                text = "Đã khôi phục phương tiện lên thiết bị."
+                tone = .success
+            } catch let failure as TransportFailure where failure.isCancellation {
+                text = "⏹ đã dừng (\(failure.label))"
+                tone = .warning
+            } catch {
+                text = "❌ \(error.localizedDescription)"
+                tone = .error
+            }
+            await MainActor.run {
+                restoringMedia = false
+                showStatus(text, tone)
+                refreshMediaTotals()
+            }
+        }
+    }
 
     // MARK: - Reset
 
@@ -522,14 +574,21 @@ struct HomeView: View {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
                               title: "Đặt lại",
                               tint: AppPalette.danger)
-                AppButton(
-                    title: "Đặt lại tinh chỉnh về mặc định",
-                    systemImage: "arrow.counterclockwise",
-                    disabled: running || resetting,
-                    destructive: true
-                ) {
+                Button {
                     showResetSheet = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 15, weight: .semibold))
+                        Text("Đặt lại tinh chỉnh về mặc định")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.glassProminent)
+                .tint(AppPalette.danger)
+                .controlSize(.large)
+                .disabled(running || resetting)
                 NativeNote("Đưa các trang đã chọn về trạng thái gốc trên thiết bị.")
             }
         }
@@ -550,7 +609,7 @@ struct HomeView: View {
     // MARK: - Log
 
     private var logCard: some View {
-        AppCard(padding: 14) {
+        AppCard(padding: 12) {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(
                     icon: "terminal",
@@ -628,7 +687,7 @@ struct HomeView: View {
         return lines.joined(separator: "\n\n")
     }
 
-    // MARK: - Logic (giữ nguyên)
+    // MARK: - Logic
 
     func resetPairing() {
         pairingFileRaw = nil
@@ -925,5 +984,13 @@ struct HomeView: View {
         GoldenNuggetEngine.shared.onLog = { line in
             RunLog.shared.append(line)
         }
+    }
+}
+
+// Modifier có điều kiện cho keyboardDone — chỉ áp cho numberPad
+private struct ConditionalNativeKeyboardDone: ViewModifier {
+    let enabled: Bool
+    func body(content: Content) -> some View {
+        if enabled { content.nativeKeyboardDone() } else { content }
     }
 }
