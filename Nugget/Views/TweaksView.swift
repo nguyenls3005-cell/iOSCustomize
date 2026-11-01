@@ -21,26 +21,31 @@ struct TweaksView: View {
     @State private var foldedByHand: Set<TweakSection> = []
     @State private var searchText = ""
 
+    // Debounce autosave bằng Timer, không tạo Task mỗi lần toggle.
+    @State private var autosaveTimer: Task<Void, Never>?
+
     var body: some View {
+        // Tính visibleSpecs một lần / body render — tránh filter lặp lại.
+        let specs = visibleSpecs
         ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                identityCard
+            LazyVStack(spacing: AppPalette.sGap) {
+                identityCard(specs: specs)
                 importCard
                 templatesLinkCard
-                if searchActive && visibleSpecs.isEmpty { emptySearchCard }
-                tweakCards
+                if searchActive && specs.isEmpty { emptySearchCard }
+                tweakCards(specs: specs)
                 if let importReport { reportCard(importReport) }
                 if let importError { errorCard(importError) }
                 if !tail.isEmpty { logCard }
             }
             .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Tweaks")
+        .navigationTitle("Tinh chỉnh")
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search tweaks")
+                    prompt: "Tìm tinh chỉnh")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await deviceMonitor.refresh()
@@ -49,11 +54,17 @@ struct TweaksView: View {
         }
         .onChange(of: identity.version) { _, _ in offerUntestedTweaks() }
         .onChange(of: untestedTweaks) { _, _ in formEpoch += 1 }
-        .alert("This is not all tweaks", isPresented: $showUntestedChoice) {
-            Button("Enable incompatible tweaks") { untestedTweaks = true; untestedChoiceDone = true }
-            Button("No", role: .cancel) { untestedChoiceDone = true }
+        .onChange(of: selection) { _, _ in scheduleAutosave() }
+        .alert("Không phải toàn bộ tinh chỉnh", isPresented: $showUntestedChoice) {
+            Button("Bật tinh chỉnh không tương thích") {
+                untestedTweaks = true
+                untestedChoiceDone = true
+            }
+            Button("Không", role: .cancel) {
+                untestedChoiceDone = true
+            }
         } message: {
-            Text("You can get more tweaks, but they are untested with your iOS version.")
+            Text("Bạn có thể mở thêm tinh chỉnh, nhưng chúng chưa được kiểm tra với phiên bản iOS của bạn.")
         }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [.json]) { result in
@@ -82,12 +93,11 @@ struct TweaksView: View {
             })
     }
 
-    private var identityCard: some View {
+    private func identityCard(specs: [TweakSpec]) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
-                Text(identity.describe)
-                    .font(.system(size: 15, weight: .semibold))
-                NativeNote("\(selection.enabledCount) of \(visibleSpecs.count) applicable tweak(s) enabled.")
+                Text(identity.describe).font(.subheadline.weight(.semibold))
+                NativeNote("\(selection.enabledCount) / \(specs.count) tinh chỉnh đang bật.")
             }
         }
     }
@@ -95,23 +105,21 @@ struct TweaksView: View {
     private var templatesLinkCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "slider.horizontal.below.rectangle",
-                              title: "Templates")
+                AppCardHeader(icon: "slider.horizontal.below.rectangle", title: "Mẫu")
                 NavigationLink(destination: TemplatesView(selection: .constant(TemplateSelection()))) {
                     HStack(spacing: 10) {
-                        Text("Manage Templates")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Quản lý mẫu").font(.subheadline)
                             .foregroundStyle(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.tertiary)
                     }
                     .padding(.vertical, 4)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                NativeNote("Apply custom `.batter` templates along with your tweaks.")
+                NativeNote("Áp dụng `.batter` cùng tinh chỉnh.")
             }
         }
     }
@@ -119,7 +127,7 @@ struct TweaksView: View {
     private var importCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "tray.and.arrow.down.fill", title: "Saved state")
+                AppCardHeader(icon: "tray.and.arrow.down.fill", title: "Trạng thái đã lưu")
                 Button {
                     showImporter = true
                 } label: {
@@ -127,8 +135,8 @@ struct TweaksView: View {
                         Image(systemName: "square.and.arrow.down")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Import autosave.json")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Nhập autosave.json")
+                            .font(.subheadline)
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -150,8 +158,8 @@ struct TweaksView: View {
                         Image(systemName: "xmark.circle")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.danger)
-                        Text("Clear all tweaks")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Xoá toàn bộ tinh chỉnh")
+                            .font(.subheadline)
                             .foregroundStyle(AppPalette.danger)
                         Spacer()
                     }
@@ -167,22 +175,23 @@ struct TweaksView: View {
     }
 
     @ViewBuilder
-    private var tweakCards: some View {
+    private func tweakCards(specs: [TweakSpec]) -> some View {
         ForEach(TweakSection.allCases.filter { $0 != .daemons }) { section in
-            let specs = visibleSpecs.filter { $0.section == section }
-            if !specs.isEmpty {
-                let on = specs.filter { selection.isOn($0) }.count
-                let collapsed = collapsedBinding(for: section, specs: specs)
-                AppCard(padding: 14) {
-                    VStack(alignment: .leading, spacing: 10) {
+            let sectionSpecs = specs.filter { $0.section == section }
+            if !sectionSpecs.isEmpty {
+                let on = sectionSpecs.filter { selection.isOn($0) }.count
+                let collapsed = collapsedBinding(for: section, specs: sectionSpecs)
+                AppCard(padding: 12) {
+                    VStack(alignment: .leading, spacing: 8) {
                         NativeCollapsibleHeader(
-                            title: "\(section.rawValue) (\(on)/\(specs.count))",
+                            title: "\(section.rawValue) (\(on)/\(sectionSpecs.count))",
                             collapsed: collapsed)
                         if !collapsed.wrappedValue {
-                            ForEach(Array(specs.enumerated()), id: \.element.id) { idx, spec in
+                            ForEach(Array(sectionSpecs.enumerated()), id: \.element.id) { idx, spec in
                                 TweakRow(spec: spec, selection: $selection)
                                     .id("\(spec.id)#\(formEpoch)")
-                                if idx < specs.count - 1 { AppDivider() }
+                                    .equatable()
+                                if idx < sectionSpecs.count - 1 { AppDivider() }
                             }
                         }
                     }
@@ -194,7 +203,7 @@ struct TweaksView: View {
     private func reportCard(_ report: TweakImportReport) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "checkmark.circle", title: "Import result")
+                AppCardHeader(icon: "checkmark.circle", title: "Kết quả nhập")
                 ForEach(Array(report.logLines.enumerated()), id: \.offset) { _, line in
                     Text(line)
                         .font(.system(size: 12, design: .monospaced))
@@ -209,7 +218,7 @@ struct TweaksView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Import failed",
+                              title: "Nhập thất bại",
                               tint: AppPalette.danger)
                 NativeNote(message)
             }
@@ -217,9 +226,9 @@ struct TweaksView: View {
     }
 
     private var logCard: some View {
-        AppCard(padding: 14) {
+        AppCard(padding: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "terminal", title: "Run log")
+                AppCardHeader(icon: "terminal", title: "Nhật ký")
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(tail.enumerated()), id: \.offset) { _, line in
@@ -230,7 +239,8 @@ struct TweaksView: View {
                         }
                     }
                 }
-                .frame(height: 220)
+                .frame(height: 200)
+                .scrollIndicators(.hidden)
             }
         }
     }
@@ -238,8 +248,8 @@ struct TweaksView: View {
     private var emptySearchCard: some View {
         AppCard {
             AppEmptyState(icon: "magnifyingglass",
-                          title: "No matches",
-                          message: "Nothing in the visible tweaks matches the query.")
+                          title: "Không có kết quả",
+                          message: "Không tinh chỉnh nào khớp với từ khoá.")
         }
     }
 
@@ -271,8 +281,21 @@ struct TweaksView: View {
 
     private var autosaveNote: String {
         let path = "Documents/GoldenNugget/Presets/\(GoldenNuggetAutosave.presetName).json"
-        let state = autosaveSaved ? "saved" : "nothing saved yet"
-        return "Your selection is saved to \(path) on every change (\(state))."
+        let state = autosaveSaved ? "đã lưu" : "chưa có gì"
+        return "Lựa chọn được lưu vào \(path) sau mỗi thay đổi (\(state))."
+    }
+
+    /// Debounce nhẹ: giữ 1 Task, huỷ Task cũ nếu còn pending. Không tạo Task
+    /// mới trên mỗi toggle — đây là thứ làm toggle không bị "khựng".
+    private func scheduleAutosave() {
+        autosaveTimer?.cancel()
+        let snapshot = selection
+        let device = identity
+        autosaveTimer = Task.detached(priority: .background) {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            _ = GoldenNuggetAutosave.save(snapshot, identity: device)
+        }
     }
 
     private func importAutosave(from url: URL) {
