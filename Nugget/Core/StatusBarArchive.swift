@@ -1,10 +1,10 @@
 import Foundation
 
 /// Xử lý việc tạo file StatusBarOverrides.archive cho iOS 27+.
-/// File này bắt buộc phải là NSKeyedArchiver binary plist chứa các class
-/// của SpringBoard, nếu không hệ thống sẽ bỏ qua.
+/// File BẮT BUỘC là NSKeyedArchiver binary plist chứa các class runtime
+/// của SpringBoard (`_SBSystemStatusStatusBarOverridesArchiveRecord`).
+/// Nếu sai format, SpringBoard âm thầm bỏ qua file → status bar không đổi.
 enum StatusBarArchive {
-    /// Đường dẫn tương đối trên thiết bị (dùng trong backup domain).
     static let relativePath = "/var/mobile/Library/SpringBoard/StatusBarOverrides.archive"
     static let domain = "ManagedPreferencesDomain"
 
@@ -24,19 +24,31 @@ enum StatusBarArchive {
         return dropped
     }
 
-    /// Tạo data để ghi vào thiết bị từ overrides hiện tại.
+    /// Build archive data từ overrides hiện tại.
     static func build(_ overrides: StatusBarOverrides) throws -> Data {
         try StatusBarArchiveBuilder.build(from: overrides)
     }
 
-    /// Tạo data rỗng (dùng khi reset).
+    /// Build archive rỗng để reset (xoá hết carrier / badge).
     static func buildReset() throws -> Data {
         try StatusBarArchiveBuilder.buildReset()
     }
 
-    /// Ghi file trực tiếp (dùng cho test hoặc nếu engine cho phép).
+    /// Ghi file trực tiếp — validate định dạng plist trước khi ghi.
     static func write(to url: URL, from overrides: StatusBarOverrides) throws {
         let data = try build(overrides)
+
+        // Sanity: bplist00 magic bytes. Nếu không phải binary plist → sai format.
+        let magic: [UInt8] = [0x62, 0x70, 0x6C, 0x69, 0x73, 0x74, 0x30, 0x30] // "bplist00"
+        let head = [UInt8](data.prefix(8))
+        guard head == magic else {
+            throw NSError(
+                domain: "Axiom.StatusBarArchive",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Archive is not a binary plist — aborting write."]
+            )
+        }
+
         try data.write(to: url, options: .atomic)
     }
 }
