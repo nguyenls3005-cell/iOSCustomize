@@ -3,31 +3,32 @@ import UniformTypeIdentifiers
 
 struct TemplatesView: View {
     @Binding var selection: TemplateSelection
-
     @State private var identity: DeviceIdentity = .unknown
     @State private var status: String?
     @State private var statusTone: GoldenTone = .secondary
     @State private var showImporter = false
     @State private var pickError: String?
-
     @State private var replaceTarget: (template: Int, option: Int)?
     @State private var showReplaceImporter = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                introCard
-                if !selection.templates.isEmpty { templateListCard }
-                importCard
-                if let status { statusCard(status) }
-                if let pickError { errorCard(pickError) }
-                RunLogCard()
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    introCard
+                    if !selection.templates.isEmpty { templateListCard }
+                    importCard
+                    if let status { statusCard(status) }
+                    if let pickError { errorCard(pickError) }
+                    RunLogCard()
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Templates")
+        .tint(AppPalette.accent)
+        .navigationTitle("Mẫu")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             identity = await DeviceIdentity.read()
@@ -46,14 +47,14 @@ struct TemplatesView: View {
 
     private var introCard: some View {
         AppCard {
-            NativeNote("A `.batter` file is a ZIP holding a `config.json`: it names the domain to restore into and lists what you may change — an image to swap in, a colour, a number, which of three variants to install. Import one, fill in its options here, then press Apply on the home page. Nothing is written to the device until then.")
+            NativeNote("`.batter` là ZIP chứa `config.json`: khai báo domain khôi phục và các tuỳ chọn — ảnh thay thế, màu, số, chọn 1 trong 3 biến thể. Nhập, điền tuỳ chọn ở đây, rồi Apply ở trang chủ. Chưa ghi gì vào thiết bị trước đó.")
         }
     }
 
     private var importCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "square.and.arrow.down", title: "Import")
+                AppCardHeader(icon: "square.and.arrow.down", title: "Nhập")
                 Button {
                     showImporter = true
                 } label: {
@@ -61,8 +62,7 @@ struct TemplatesView: View {
                         Image(systemName: "plus.circle")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Import .batter template")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Nhập mẫu .batter").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -76,8 +76,7 @@ struct TemplatesView: View {
                         Image(systemName: "square.and.pencil")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Create a template with Batter Builder")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Tạo mẫu với Batter Builder").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -85,12 +84,12 @@ struct TemplatesView: View {
                     .contentShape(Rectangle())
                 }
 
-                NavigationLink("Community template switches") { CommunityCatalogView() }
-                    .font(.system(size: 15, weight: .medium))
+                NavigationLink("Mẫu cộng đồng") { CommunityCatalogView() }
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(AppPalette.accent)
 
                 if selection.templates.isEmpty {
-                    NativeNote("No templates imported yet.")
+                    NativeNote("Chưa nhập mẫu nào.")
                 } else {
                     AppDivider()
                     Button(role: .destructive) {
@@ -101,8 +100,7 @@ struct TemplatesView: View {
                             Image(systemName: "trash")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppPalette.danger)
-                            Text("Remove all templates")
-                                .font(.system(size: 15, weight: .medium))
+                            Text("Xoá tất cả mẫu").font(.subheadline.weight(.medium))
                                 .foregroundStyle(AppPalette.danger)
                             Spacer()
                         }
@@ -110,7 +108,7 @@ struct TemplatesView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    NativeNote("Each template is copied into this app, so removing one here removes the copy — the file you imported is untouched.")
+                    NativeNote("Mỗi mẫu được copy vào app, xoá ở đây xoá bản copy — tệp gốc còn.")
                 }
             }
         }
@@ -120,7 +118,7 @@ struct TemplatesView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 AppCardHeader(icon: "slider.horizontal.below.rectangle",
-                              title: "Imported (\(selection.templates.count))")
+                              title: "Đã nhập (\(selection.templates.count))")
                 ForEach(Array(selection.templates.enumerated()), id: \.element.id) { pair in
                     templateRow(pair.offset, pair.element)
                     if pair.offset < selection.templates.count - 1 { AppDivider() }
@@ -133,11 +131,8 @@ struct TemplatesView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(template.title)
-                        .font(.system(size: 15, weight: .medium))
-                        .lineLimit(2)
-                    Text(template.summary)
-                        .font(.caption)
+                    Text(template.title).font(.subheadline.weight(.medium)).lineLimit(2)
+                    Text(template.summary).font(.caption)
                         .foregroundStyle(template.requiresSparserestore
                                          ? AppPalette.warning : Color.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -148,15 +143,14 @@ struct TemplatesView: View {
                     TemplateImports.remove(template)
                     selection.loadFromDisk(deviceVersion: identity.version)
                 } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 13))
+                    Image(systemName: "trash").font(.system(size: 13))
                         .foregroundStyle(AppPalette.danger)
                 }
                 .buttonStyle(.plain)
             }
 
             if template.requiresSparserestore {
-                NativeSafetyNote("This template cannot be delivered by this app: it asks for sparserestore, which this app does not implement. Importing it is harmless — it is simply left out of the apply, and the run log says so rather than reporting success.")
+                NativeSafetyNote("Mẫu này không đưa được bởi app: cần sparserestore, chưa hỗ trợ. Nhập thì vô hại — bị bỏ khi Apply, log sẽ nói thay vì báo thành công.")
             }
 
             if !template.previews.isEmpty {
@@ -164,12 +158,11 @@ struct TemplatesView: View {
                     .frame(height: template.previewLayout == .stacked ? 250 : 180)
             }
             if let banner = template.bannerText {
-                Text(banner)
-                    .font(.system(size: 12))
+                Text(banner).font(.caption)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(8)
                     .background(Color.secondary.opacity(0.12),
-                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous))
             }
             if let description = template.description {
                 NativeNote(description)
@@ -177,8 +170,7 @@ struct TemplatesView: View {
 
             if template.canChangeBundleID {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("App bundle id")
-                        .font(.system(size: 13, weight: .medium))
+                    Text("Bundle id ứng dụng").font(.footnote.weight(.medium))
                     TextField("Bundle id", text: Binding(
                         get: { selection.templates[safe: index]?.bundleID ?? template.bundleID },
                         set: { newValue in
@@ -190,7 +182,7 @@ struct TemplatesView: View {
                     .autocorrectionDisabled()
                     .textFieldStyle(.roundedBorder)
                     .font(.callout)
-                    NativeNote("The template's files are restored into this bundle's container. Its own note: this also changes files whose names start the same way.")
+                    NativeNote("Tệp mẫu khôi phục vào container của bundle này. Ghi chú từ mẫu: cũng đổi tệp có tên bắt đầu giống.")
                 }
             }
 
@@ -226,8 +218,6 @@ struct TemplatesView: View {
         }
     }
 
-    // MARK: - One option
-
     @ViewBuilder
     private func optionRow(templateIndex: Int, optionIndex: Int,
                            option: TemplateOption) -> some View {
@@ -240,7 +230,7 @@ struct TemplatesView: View {
                             replaceTarget = (templateIndex, optionIndex)
                             showReplaceImporter = true
                         } label: {
-                            Label(value.value == nil ? value.buttonLabel : "Replace chosen file",
+                            Label(value.value == nil ? value.buttonLabel : "Thay tệp đã chọn",
                                   systemImage: value.value == nil ? "square.and.arrow.down" : "arrow.triangle.2.circlepath")
                         }
                         .buttonStyle(.bordered)
@@ -260,10 +250,10 @@ struct TemplatesView: View {
                     }
                 }
                 if value.required && value.value == nil {
-                    NativeNote("This one is required: the template cannot be applied until a file is chosen.")
+                    NativeNote("Bắt buộc: chưa chọn tệp thì mẫu không apply được.")
                 }
-                NativeNote("Allowed: \(value.allowedFiles). Applies the same file to every path the template lists.")
-                NativeNote("The chosen file is not kept between launches — re-pick it after reopening the app. Everything else you set here is.")
+                NativeNote("Cho phép: \(value.allowedFiles). Áp dụng cùng tệp cho mọi đường dẫn mẫu.")
+                NativeNote("Tệp đã chọn không giữ giữa các lần mở — chọn lại sau khi mở lại app. Các tuỳ chọn khác vẫn giữ.")
 
             case let value as RemoveOption:
                 optionControl(title: value.label) {
@@ -278,14 +268,14 @@ struct TemplatesView: View {
                     .tint(AppPalette.accent)
                 }
                 if let identifier = value.identifier {
-                    NativeNote("Removes the element \"\(identifier)\""
-                        + (value.useCAID ? " (by its CoreAnimation id)" : "")
-                        + " from: \(value.files.joined(separator: ", ")).")
+                    NativeNote("Xoá phần tử \"\(identifier)\""
+                        + (value.useCAID ? " (theo CoreAnimation id)" : "")
+                        + " khỏi: \(value.files.joined(separator: ", ")).")
                 } else {
-                    NativeNote("Deletes: \(value.files.joined(separator: ", ")).")
+                    NativeNote("Xoá: \(value.files.joined(separator: ", ")).")
                 }
                 if value.inverted {
-                    NativeNote("Inverted: the targets are deleted while this is **off**.")
+                    NativeNote("Đảo: mục tiêu bị xoá khi công tắc **tắt**.")
                 }
 
             case let value as SetOption:
@@ -351,7 +341,7 @@ struct TemplatesView: View {
                     .tint(AppPalette.accent)
 
                 case .textbox:
-                    TextField("Value", text: Binding(
+                    TextField("Giá trị", text: Binding(
                         get: { (current(templateIndex, optionIndex) as? SetOption)?.text ?? "" },
                         set: { newValue in
                             mutate(templateIndex, optionIndex, as: SetOption.self) { opt in
@@ -421,41 +411,39 @@ struct TemplatesView: View {
     private func optionControl<Content: View>(title: String,
                                               @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
+            Text(title).font(.footnote.weight(.medium)).foregroundStyle(.secondary)
             content()
         }
     }
 
     private func setNote(_ value: SetOption) -> String {
-        var parts = ["Sets \(value.key) on element \"\(value.identifier)\""
-            + (value.useCAID ? " (by its CoreAnimation id)" : "") + "."]
-        parts.append("Applies to: \(value.files.joined(separator: ", ")).")
+        var parts = ["Đặt \(value.key) cho phần tử \"\(value.identifier)\""
+            + (value.useCAID ? " (theo CoreAnimation id)" : "") + "."]
+        parts.append("Áp dụng cho: \(value.files.joined(separator: ", ")).")
         if value.valueType == "float" {
-            parts.append("Declared as a float, so the slider works in thousandths.")
+            parts.append("Khai báo là float, slider đi theo phần nghìn.")
         }
         if let valueTag = value.valueTag {
-            parts.append("Keeps the \(valueTag)(…) wrapper it shipped with.")
+            parts.append("Giữ wrapper \(valueTag)(…) ban đầu.")
         }
         if let min = value.minValue, let max = value.maxValue, !min.isEmpty, !max.isEmpty {
-            parts.append("Range \(min[0].description)–\(max[0].description).")
+            parts.append("Khoảng \(min[0].description)–\(max[0].description).")
         }
         if value.inverted {
-            parts.append("Inverted: the value written is the opposite of the switch.")
+            parts.append("Đảo: giá trị ghi ngược công tắc.")
         }
         if value.toggleOnValue != nil || value.toggleOffValue != nil {
-            parts.append("This toggle writes a value other than on/off.")
+            parts.append("Công tắc ghi giá trị khác on/off.")
         }
         return parts.joined(separator: " ")
     }
 
     private func pickerNote(_ value: PickerOption) -> String {
         var parts = [value.allowMultipleSelection
-            ? "Every choice you do not pick is deleted before the files are delivered."
-            : "The choices you do not pick are deleted before the files are delivered."]
+            ? "Mọi lựa chọn không chọn bị xoá trước khi tệp được đưa."
+            : "Các lựa chọn không chọn bị xoá trước khi tệp được đưa."]
         if value.renames {
-            parts.append("The chosen files are renamed to: \(value.names.joined(separator: ", ")).")
+            parts.append("Tệp đã chọn đổi tên thành: \(value.names.joined(separator: ", ")).")
         }
         return parts.joined(separator: " ")
     }
@@ -463,7 +451,7 @@ struct TemplatesView: View {
     private func statusCard(_ text: String) -> some View {
         AppCard {
             Text(text)
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(statusTone.nativeColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -474,14 +462,12 @@ struct TemplatesView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Import failed",
+                              title: "Nhập thất bại",
                               tint: AppPalette.danger)
                 NativeSafetyNote(message)
             }
         }
     }
-
-    // MARK: - Selection plumbing
 
     private func current(_ templateIndex: Int, _ optionIndex: Int) -> TemplateOption? {
         guard let template = selection.templates[safe: templateIndex],
@@ -500,8 +486,6 @@ struct TemplatesView: View {
         selection.update(template)
     }
 
-    // MARK: - Import
-
     private var replaceContentTypes: [UTType] {
         guard let target = replaceTarget,
               let option = current(target.template, target.option) as? ReplaceOption
@@ -519,21 +503,20 @@ struct TemplatesView: View {
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             if let community = try? CommunityTemplate.load(url) {
                 let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                guard size <= 25 * 1024 * 1024 else { throw CommunityError("Template exceeds 25 MB.") }
+                guard size <= 25 * 1024 * 1024 else { throw CommunityError("Mẫu vượt 25 MB.") }
                 try CommunityTemplateStore.shared.install(Data(contentsOf: url), id: "local-" + UUID().uuidString.lowercased())
-                status = "Imported \(community.title). Review it in Community template switches before Apply."
+                status = "Đã nhập \(community.title). Xem trong Mẫu cộng đồng trước khi Apply."
                 statusTone = .secondary
                 return
             }
             let template = try TemplateImports.import(from: url, deviceVersion: identity.version)
             selection.loadFromDisk(deviceVersion: identity.version)
-            status = "Imported \(template.title)."
+            status = "Đã nhập \(template.title)."
             statusTone = .secondary
-            RunLog.shared.append("Templates: imported \(url.lastPathComponent) as "
-                + "\"\(template.title)\" (\(template.domain), \(template.options.count) option(s)).")
+            RunLog.shared.append("Templates: đã nhập \(url.lastPathComponent) thành \"\(template.title)\" (\(template.domain), \(template.options.count) tuỳ chọn).")
         } catch {
             pickError = error.localizedDescription
-            RunLog.shared.append("Templates: import failed — \(error.localizedDescription)")
+            RunLog.shared.append("Templates: nhập thất bại — \(error.localizedDescription)")
         }
     }
 
