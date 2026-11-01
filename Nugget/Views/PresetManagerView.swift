@@ -1,25 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The preset manager — GoldenNugget's `IOSPresetsPage`
-/// (`src/gui/ios/presets.py`) and the actions it shares with the home popup
-/// (`src/gui/ios/preset_menu.py`).
-///
-/// The reference's whole toolkit lives here: save the current configuration,
-/// load one (with the compatibility warnings), delete, export, partial export,
-/// import, and roll back to the snapshot taken before the last successful
-/// apply.  The desktop's animated *Manage* popup on the home screen is not
-/// reproduced — its own *Manage presets* button opens a full page, and a
-/// phone-width screen wants the page.
-///
-/// **Documented divergence**: the reference relaunches the app after a load so
-/// the freshly written config is read back.  Here a load writes straight into
-/// the live selection and persists it to the autosave the next launch reads,
-/// which is the same observable result without a restart.
 struct PresetManagerView: View {
-    /// The live selection.  Loading a preset writes into it, because the
-    /// **home Apply** is what delivers it — the same hoisted binding the Tweaks
-    /// and Daemons pages edit.
     @Binding var selection: TweakSelection
 
     @ObservedObject private var deviceMonitor = DeviceIdentityMonitor.shared
@@ -29,10 +11,8 @@ struct PresetManagerView: View {
     @State private var selectedName: String?
     @State private var newName = ""
     @State private var newDescription = ""
-    /// One status line, in the reference's own words.
     @State private var message: String?
     @State private var messageTone: GoldenTone = .primary
-    /// The last load's report, kept visible until the next action.
     @State private var loadReport: TweakImportReport?
     @State private var confirmLoad: GoldenNuggetPresets.PresetInfo?
     @State private var confirmRollback = false
@@ -42,21 +22,19 @@ struct PresetManagerView: View {
     @State private var showImporter = false
 
     var body: some View {
-        List {
-            Section {
-                NativeNote("Save, switch and share complete tweak configurations. "
-                    + "Loading a preset replaces the current selection; the home "
-                    + "Apply still delivers it to the device.")
+        ScrollView {
+            VStack(spacing: AppPalette.sGap) {
+                introCard
+                saveCard
+                presetsCard
+                actionsCard
+                if let message { messageCard(message) }
+                if let loadReport { reportCard(loadReport) }
             }
-
-            saveSection
-            presetsSection
-            actionsSection
-
-            if let message { messageSection(message) }
-            if let loadReport { reportSection(loadReport) }
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Presets")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -83,8 +61,7 @@ struct PresetManagerView: View {
             Button("Cancel", role: .cancel) {}
             Button("Roll back") { performRollback() }
         } message: {
-            Text("Load the snapshot taken before the last successful apply? "
-                + "This will replace your current configuration.")
+            Text("Load the snapshot taken before the last successful apply? This will replace your current configuration.")
         }
         .alert("Delete Preset", isPresented: isPresented($pendingDelete),
                presenting: pendingDelete) { info in
@@ -109,113 +86,174 @@ struct PresetManagerView: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Cards
 
-    private var saveSection: some View {
-        Section("Save current configuration") {
-            TextField("Preset name", text: $newName)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            TextField("Description (optional)", text: $newDescription)
-            Button {
-                saveCurrent()
-            } label: {
-                Label("Save Preset", systemImage: "square.and.arrow.down")
-            }
-            .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    private var introCard: some View {
+        AppCard {
+            NativeNote("Save, switch and share complete tweak configurations. Loading a preset replaces the current selection; the home Apply still delivers it to the device.")
         }
     }
 
-    private var presetsSection: some View {
-        Section("Saved presets") {
-            if presets.isEmpty {
-                Text("No presets yet.")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(presets) { info in
-                    Button {
-                        selectedName = selectedName == info.name ? nil : info.name
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: selectedName == info.name
-                                  ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selectedName == info.name
-                                                 ? Color.accentColor : Color.secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(info.name)
-                                    .foregroundStyle(.primary)
-                                Text(subtitle(info))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
+    private var saveCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "square.and.arrow.down", title: "Save current configuration")
+                TextField("Preset name", text: $newName)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+                TextField("Description (optional)", text: $newDescription)
+                    .textFieldStyle(.roundedBorder)
+                AppButton(title: "Save Preset",
+                          systemImage: "square.and.arrow.down",
+                          disabled: newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                    saveCurrent()
                 }
             }
-            Button {
-                showImporter = true
-            } label: {
-                Label("Import Preset…", systemImage: "square.and.arrow.up.on.square")
+        }
+    }
+
+    private var presetsCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "tray.2.fill",
+                              title: "Saved presets (\(presets.count))")
+                if presets.isEmpty {
+                    Text("No presets yet.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 8)
+                } else {
+                    ForEach(Array(presets.enumerated()), id: \.element.name) { idx, info in
+                        Button {
+                            selectedName = selectedName == info.name ? nil : info.name
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: selectedName == info.name
+                                      ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(selectedName == info.name
+                                                     ? AppPalette.accent : Color.secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(info.name)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundStyle(.primary)
+                                    Text(subtitle(info))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if idx < presets.count - 1 { AppDivider() }
+                    }
+                }
+                AppDivider()
+                Button {
+                    showImporter = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.and.arrow.up.on.square")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                        Text("Import Preset…")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private var actionsSection: some View {
-        Section {
-            Button("Load") { requestLoad() }
+    private var actionsCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "bolt.fill", title: "Actions")
+                AppButton(title: "Load",
+                          systemImage: "play.fill",
+                          disabled: selected == nil) {
+                    requestLoad()
+                }
+                AppButton(title: "Export",
+                          systemImage: "square.and.arrow.up",
+                          disabled: selected == nil) {
+                    export(include: nil)
+                }
+                Button {
+                    requestPartialExport()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.and.arrow.up.on.square")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(selected == nil ? Color.secondary : AppPalette.accent)
+                        Text("Partial Export…")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(selected == nil ? Color.secondary : Color.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 .disabled(selected == nil)
-            Button("Export") { export(include: nil) }
-                .disabled(selected == nil)
-            Button("Partial Export…") { requestPartialExport() }
-                .disabled(selected == nil)
-            Button("Rollback Last Apply") { requestRollback() }
-                .disabled(!GoldenNuggetPresets.hasRollback)
-            Button(role: .destructive) {
-                pendingDelete = selected
-            } label: {
-                Text("Delete")
+
+                AppButton(title: "Rollback Last Apply",
+                          systemImage: "arrow.uturn.backward",
+                          disabled: !GoldenNuggetPresets.hasRollback) {
+                    requestRollback()
+                }
+                AppButton(title: "Delete",
+                          systemImage: "trash",
+                          disabled: selected == nil,
+                          destructive: true) {
+                    pendingDelete = selected
+                }
+                NativeNote(GoldenNuggetPresets.hasRollback
+                     ? "Rollback restores the snapshot taken before the last successful apply."
+                     : "Rollback is available once an apply has succeeded.")
             }
-            .disabled(selected == nil)
-        } footer: {
-            Text(GoldenNuggetPresets.hasRollback
-                 ? "Rollback restores the snapshot taken before the last successful apply."
-                 : "Rollback is available once an apply has succeeded.")
         }
     }
 
-    private func messageSection(_ text: String) -> some View {
-        Section {
+    private func messageCard(_ text: String) -> some View {
+        AppCard {
             Text(text)
-                .font(.subheadline)
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(messageTone.nativeColor)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    /// The same block the Tweaks page writes for an import — the reference logs
-    /// one report for both a preset load and an autosave import.
-    private func reportSection(_ report: TweakImportReport) -> some View {
-        Section("Load result") {
-            ForEach(Array(report.logLines.enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    private func reportCard(_ report: TweakImportReport) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "checkmark.circle", title: "Load result")
+                ForEach(Array(report.logLines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
     }
 
-    // MARK: - Derived state
+    // MARK: - Derived
 
     private var selected: GoldenNuggetPresets.PresetInfo? {
         presets.first { $0.name == selectedName }
     }
 
-    /// One-line secondary text for a row: device, iOS, tags — the reference's
-    /// `preset_subtitle` (`preset_menu.py:55`).
     private func subtitle(_ info: GoldenNuggetPresets.PresetInfo) -> String {
         var text = "\(info.deviceModel) • iOS \(info.iosVersion)"
         if !info.tags.isEmpty { text += "  #" + info.tags.joined(separator: " #") }
@@ -232,8 +270,6 @@ struct PresetManagerView: View {
         }
     }
 
-    /// `save_preset_flow` (`preset_menu.py:201`): a name is required, the rest
-    /// is the manager's job.
     private func saveCurrent() {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -267,9 +303,6 @@ struct PresetManagerView: View {
         confirmLoad = info
     }
 
-    /// The reference's confirm text plus its daemon-compatibility warning
-    /// (`preset_menu.py:123`).  The hidden-feature warning is not reproduced:
-    /// this port has no per-feature safety rules engine to consult.
     private func loadConfirmMessage(_ info: GoldenNuggetPresets.PresetInfo) -> String {
         var text = "Load preset \"\(info.name)\"?"
         if !info.description.isEmpty { text += "\n\nDescription: \(info.description)" }
@@ -294,8 +327,8 @@ struct PresetManagerView: View {
             mismatches.append("\(savedType) vs current \(currentType)")
         }
         guard !mismatches.isEmpty else { return nil }
-        return "This preset contains daemon modifications that were saved for a "
-            + "different device:\n" + mismatches.map { "• \($0)" }.joined(separator: "\n")
+        return "This preset contains daemon modifications that were saved for a different device:\n"
+            + mismatches.map { "• \($0)" }.joined(separator: "\n")
             + "\n\nDaemons are sensitive to the iOS version and device type, and "
             + "applying incompatible ones can bootloop your device. Proceed with caution."
     }
@@ -308,8 +341,6 @@ struct PresetManagerView: View {
         apply(preset, label: "Preset \"\(info.name)\" loaded.")
     }
 
-    /// `rollback_preset_flow` (`preset_menu.py:188`): the `__Rollback` snapshot
-    /// loaded through the ordinary path.
     private func requestRollback() {
         guard GoldenNuggetPresets.hasRollback else {
             setMessage("There is no previous successful apply to roll back yet.", .warning)
@@ -326,8 +357,6 @@ struct PresetManagerView: View {
         apply(preset, label: "Rolled back to the previous applied state.")
     }
 
-    /// `PresetManager.load_preset`'s observable effect, ported: apply the parsed
-    /// preset to the live selection, keep it as the autosave, and log the report.
     private func apply(_ preset: GoldenNuggetPreset, label: String) {
         do {
             let safety = HotLoadService.shared.currentPolicy
@@ -394,8 +423,6 @@ struct PresetManagerView: View {
         refresh()
     }
 
-    /// `import_preset_flow` (`preset_menu.py:294`): the manager validates the
-    /// document and picks a unique name; the page reports the outcome.
     private func importPreset(from url: URL) {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -409,15 +436,11 @@ struct PresetManagerView: View {
         }
     }
 
-    // MARK: - Helpers
-
     private func setMessage(_ text: String, _ tone: GoldenTone) {
         message = text
         messageTone = tone
     }
 
-    /// Whether a stored preset carries daemon changes; the file is read raw
-    /// because `presetHasDaemonChanges` takes the parsed root.
     private func presetHasDaemonChanges(name: String) -> Bool {
         let url = GoldenNuggetPresets.fileURL(for: name)
         guard let data = try? Data(contentsOf: url),
@@ -430,7 +453,6 @@ struct PresetManagerView: View {
         Int(version.split(separator: ".").first ?? "")
     }
 
-    /// `_device_type` (`preset_menu.py:75`): the leading family name only.
     private func deviceType(_ model: String) -> String {
         let lower = model.lowercased()
         if lower.hasPrefix("iphone") { return "iPhone" }
@@ -438,8 +460,6 @@ struct PresetManagerView: View {
         return ""
     }
 
-    /// `isPresented:` needs a `Bool` binding even when the value it presents is
-    /// optional; this keeps the alert and the pending value in step.
     private func isPresented<T>(_ value: Binding<T?>) -> Binding<Bool> {
         Binding(get: { value.wrappedValue != nil },
                 set: { if !$0 { value.wrappedValue = nil } })
@@ -448,16 +468,11 @@ struct PresetManagerView: View {
 
 // MARK: - Export support
 
-/// A file handed to the share sheet.  `Identifiable` so `.sheet(item:)` can
-/// present one per export.
 private struct ShareItem: Identifiable {
     let url: URL
     var id: String { url.path }
 }
 
-/// The reference exports through a save-file dialog; iOS has no such dialog, so
-/// the file is written to a temporary directory and offered through the system
-/// share sheet.
 private struct ShareSheet: View {
     let url: URL
 
@@ -465,9 +480,10 @@ private struct ShareSheet: View {
         VStack(spacing: 16) {
             ShareLink(item: url) {
                 Label("Save or share preset", systemImage: "square.and.arrow.up")
-                    .font(.headline)
+                    .font(.system(size: 16, weight: .semibold))
             }
-            .buttonStyle(.glassProminent)
+            .buttonStyle(.borderedProminent)
+            .tint(AppPalette.accent)
             .controlSize(.large)
             Text(url.lastPathComponent)
                 .font(.footnote)
@@ -478,8 +494,6 @@ private struct ShareSheet: View {
     }
 }
 
-/// What a partial export is choosing from: the stored preset and the tweak ids
-/// it holds (`PartialExportDialog` + `_filter_export`, `preset_manager.py:262`).
 private struct PartialExportTarget: Identifiable {
     let info: GoldenNuggetPresets.PresetInfo
     let ids: [String]
@@ -514,7 +528,7 @@ private struct PartialExportSheet: View {
                                 Image(systemName: chosen.contains(id)
                                       ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(chosen.contains(id)
-                                                     ? Color.accentColor : Color.secondary)
+                                                     ? AppPalette.accent : Color.secondary)
                                 Text(id).foregroundStyle(.primary)
                             }
                         }
@@ -524,6 +538,7 @@ private struct PartialExportSheet: View {
                     Text("Tweaks to include (\(chosen.count)/\(target.ids.count))")
                 }
             }
+            .appThemedList()
             .navigationTitle("Partial Export")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -536,5 +551,6 @@ private struct PartialExportSheet: View {
                 }
             }
         }
+        .tint(AppPalette.accent)
     }
 }
