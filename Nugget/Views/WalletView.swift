@@ -1,21 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Apple Wallet card skins.
-///
-/// A card's artwork is not a preference — it lives inside the pass, and Passbook
-/// caches the rendered layers next to it, so writing a skin is two operations and
-/// both have to happen. That, and the fact that neither can be carried by a
-/// backup, is why this page exists next to the other AirLift pages rather than
-/// inside the tweaks list.
-///
-/// The layout follows AirCard's card tab: a live scanner banner, then one
-/// realistic Wallet card mockup (1.586:1) per card with its controls underneath,
-/// and the flash action in the toolbar. The page is deliberately explicit about
-/// the one thing it cannot do for the user: a card identifier has to come from
-/// somewhere, and the only source is Passbook's own log while a card is held to
-/// the reader. There is no "read my cards" button, because there is no API for
-/// it.
 struct WalletView: View {
     @State private var identity: DeviceIdentity = .unknown
     @State private var cards: [WalletCard] = []
@@ -25,30 +10,22 @@ struct WalletView: View {
     @State private var running = false
     @State private var scanning = false
     @State private var stopScan: (() -> Void)?
-    /// The picker's delegate, held here.
-    ///
-    /// `UIImagePickerController.delegate` is a weak reference, and the controller
-    /// does not retain it either — a delegate created inline is deallocated
-    /// before the picker ever appears, which is why the compiler points at
-    /// `[weak self]` and says the capture is always nil. Holding it in `@State`
-    /// is what makes the callback reachable; it is released when the pick
-    /// finishes.
     @State private var pickerDelegate: ImagePickerDelegate?
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                scannerBanner
-                blockerBanner
-
+            VStack(spacing: AppPalette.sGap) {
+                bannerCard
+                if !blocker.isEmpty { blockerCard }
                 if cards.isEmpty && !scanning {
-                    emptyState
+                    emptyCard
                 } else {
                     cardsList
                     if !log.isEmpty { logCard }
                 }
             }
-            .padding(.vertical)
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle(cards.isEmpty ? "Wallet" : "Wallet Cards (\(cards.count))")
@@ -60,39 +37,27 @@ struct WalletView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: scanning ? "stop.circle.fill" : "wave.3.left.circle")
-                        Text(scanning ? "Stop Scan" : "Scan Cards")
+                        Text(scanning ? "Stop" : "Scan")
                     }
-                    .font(.subheadline.bold())
-                    .foregroundStyle(scanning ? .red : .blue)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(scanning ? AppPalette.danger : AppPalette.accent)
                 }
                 .disabled(!canScan && !scanning)
             }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button {
-                        applyToAll()
-                    } label: {
+                    Button { applyToAll() } label: {
                         Label("Set Skin for All Cards", systemImage: "photo.on.rectangle.angled")
                     }
                     .disabled(selectedCount == 0)
-
-                    Button {
-                        setAllSelected(true)
-                    } label: {
+                    Button { setAllSelected(true) } label: {
                         Label("Select All", systemImage: "checkmark.circle")
                     }
-                    Button {
-                        setAllSelected(false)
-                    } label: {
+                    Button { setAllSelected(false) } label: {
                         Label("Deselect All", systemImage: "circle")
                     }
-
                     Divider()
-
-                    Button(role: .destructive) {
-                        clearAll()
-                    } label: {
+                    Button(role: .destructive) { clearAll() } label: {
                         Label("Clear All Cards", systemImage: "trash")
                     }
                 } label: {
@@ -100,7 +65,6 @@ struct WalletView: View {
                 }
                 .disabled(cards.isEmpty)
             }
-
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     apply()
@@ -117,19 +81,20 @@ struct WalletView: View {
                         }
                     }
                     .font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 4)
-                    .frame(minHeight: 28)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        AppPalette.accent.opacity(running || selectedCount == 0 ? 0.4 : 1),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    )
+                    .foregroundStyle(.white)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .buttonStyle(.plain)
                 .disabled(running || selectedCount == 0)
             }
         }
         .task {
             identity = await DeviceIdentity.read()
-            // The identifiers are worth keeping across launches; see
-            // `WalletCardStore`. A card that is found twice is not added twice,
-            // and a stored skin is kept for a card that is found again.
             cards = WalletCardStore.load()
         }
         .onDisappear { stopScan?(); stopScan = nil; scanning = false }
@@ -152,152 +117,115 @@ struct WalletView: View {
         blocker.isEmpty && !running
     }
 
-    // MARK: - Banners
+    // MARK: - Cards
 
-    @ViewBuilder
-    private var scannerBanner: some View {
-        if scanning || status != nil {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
+    private var bannerCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
                     if scanning {
                         ProgressView().scaleEffect(0.85)
                         Text("Live Scanner Active")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.blue)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
                     } else {
                         Image(systemName: "wave.3.left.circle")
-                            .foregroundStyle(.secondary)
-                        Text("Status")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppPalette.accent)
+                        Text("Scan for cards")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.primary)
                     }
                     Spacer()
                     if scanning {
                         Button("Stop") { toggleScan() }
-                            .font(.caption.bold())
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
-                            .controlSize(.small)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(AppPalette.danger)
                     }
                 }
                 if let status {
                     Text(status)
-                        .font(.caption)
+                        .font(.system(size: 13))
                         .foregroundStyle(tone.nativeColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(14)
-            .background(scanning ? Color.blue.opacity(0.12)
-                                 : Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.horizontal)
         }
     }
 
-    @ViewBuilder
-    private var blockerBanner: some View {
-        if !blocker.isEmpty {
-            HStack(alignment: .top, spacing: 8) {
+    private var blockerCard: some View {
+        AppCard {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppPalette.warning)
                 NativeSafetyNote(blocker)
                 Spacer(minLength: 0)
             }
-            .padding(14)
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.horizontal)
         }
     }
 
-    // MARK: - Empty state
-
-    private var emptyState: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "creditcard.viewfinder")
-                .font(.system(size: 56))
-                .foregroundStyle(.blue.opacity(0.8))
-
-            Text("No Cards Detected Yet")
-                .font(.title3.bold())
-
-            VStack(alignment: .leading, spacing: 10) {
-                step("1.", "Tap **Scan Cards** in the toolbar above.")
-                step("2.", "Hold a card against the reader while it listens.")
-                step("3.", "The card appears here — tap it to assign a skin.")
-            }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .padding(16)
-            .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.horizontal, 24)
-
-            Button {
-                toggleScan()
-            } label: {
-                HStack(spacing: 6) {
-                    Spacer()
-                    Image(systemName: scanning ? "stop.circle.fill" : "wave.3.left.circle")
-                    Text(scanning ? "Stop Scan" : "Scan Cards")
-                    Spacer()
+    private var emptyCard: some View {
+        AppCard {
+            VStack(spacing: 16) {
+                Image(systemName: "creditcard.viewfinder")
+                    .font(.system(size: 48))
+                    .foregroundStyle(AppPalette.accent.opacity(0.8))
+                Text("No Cards Detected Yet")
+                    .font(.system(size: 17, weight: .semibold))
+                VStack(alignment: .leading, spacing: 10) {
+                    step("1.", "Tap **Scan** in the toolbar above.")
+                    step("2.", "Hold a card against the reader while it listens.")
+                    step("3.", "The card appears here — tap it to assign a skin.")
                 }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                AppButton(title: scanning ? "Stop Scan" : "Scan Cards",
+                          systemImage: scanning ? "stop.circle.fill" : "wave.3.left.circle",
+                          disabled: !canScan && !scanning,
+                          destructive: scanning) {
+                    toggleScan()
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(scanning ? .red : .blue)
-            .disabled(!canScan && !scanning)
-            .padding(.horizontal, 24)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 40)
     }
 
     private func step(_ number: String, _ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(number).bold().foregroundStyle(.blue)
+            Text(number).bold().foregroundStyle(AppPalette.accent)
             Text(LocalizedStringKey(text))
         }
     }
 
-    // MARK: - Cards
-
     private var cardsList: some View {
-        VStack(spacing: 16) {
-            ForEach(cards) { card in
-                WalletCardRow(
-                    card: card,
-                    index: cards.firstIndex(where: { $0.id == card.id }) ?? 0,
-                    onToggleSelected: { toggleSelected(card.id, $0) },
-                    onPickImage: { pickImage(for: card.id) },
-                    onClearImage: { clearImage(card.id) },
-                    onDelete: { delete(card.id) })
-            }
+        ForEach(cards) { card in
+            WalletCardRow(
+                card: card,
+                index: cards.firstIndex(where: { $0.id == card.id }) ?? 0,
+                onToggleSelected: { toggleSelected(card.id, $0) },
+                onPickImage: { pickImage(for: card.id) },
+                onClearImage: { clearImage(card.id) },
+                onDelete: { delete(card.id) })
         }
-        .padding(.horizontal)
     }
 
     private var logCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Flash Log (\(log.count) lines)").font(.subheadline.bold())
-                Spacer()
-                Button("Clear") { log.removeAll() }.font(.caption)
-            }
-            ForEach(Array(log.enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        AppCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "terminal", title: "Flash Log (\(log.count))",
+                              trailing: AnyView(
+                                Button("Clear") { log.removeAll() }
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(AppPalette.accent)
+                              ))
+                ForEach(Array(log.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - Mutations
@@ -351,9 +279,6 @@ struct WalletView: View {
         tone = .secondary
         Task { @MainActor in
             do {
-                // The syslog callback is not on the main actor, so the hop is where
-                // the card is recorded rather than in the delegate: `add` writes
-                // `@State`, and `@State` is main-actor state.
                 let stop = try await WalletEngine.scanCards(
                     pairingPath: AppPaths.pairingFile.path
                 ) { identifier in
@@ -419,12 +344,8 @@ struct WalletView: View {
     }
 }
 
-/// One card as AirCard draws it: the artwork mockup, then the control bar.
-///
-/// Adapted from AirCard's `WalletCardView`. The card is a 1.586:1 Wallet-shaped
-/// tile — the real skin when one is assigned, a dashed "assign a skin" placeholder
-/// otherwise — with the selection switch, the identifier pill (tap to copy) and
-/// the delete button underneath.
+// MARK: - One card row
+
 private struct WalletCardRow: View {
     let card: WalletCard
     let index: Int
@@ -434,23 +355,19 @@ private struct WalletCardRow: View {
     let onDelete: () -> Void
 
     @State private var copied = false
-
     private var image: UIImage? { card.imageData.flatMap { UIImage(data: $0) } }
 
     var body: some View {
-        VStack(spacing: 12) {
-            artwork
-                .aspectRatio(1.586, contentMode: .fit)
-            controlBar
+        AppCard {
+            VStack(spacing: 12) {
+                artwork.aspectRatio(1.586, contentMode: .fit)
+                controlBar
+            }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(card.isSelected ? Color.blue.opacity(0.35) : Color.clear, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
+                .strokeBorder(card.isSelected ? AppPalette.accent.opacity(0.4) : Color.clear,
+                              lineWidth: 1.5)
         )
     }
 
@@ -458,23 +375,19 @@ private struct WalletCardRow: View {
         GeometryReader { geo in
             let width = geo.size.width
             let height = width / 1.586
-
             ZStack {
                 if let image {
                     ZStack(alignment: .topTrailing) {
                         Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
+                            .resizable().scaledToFill()
                             .frame(width: width, height: height)
-                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         LinearGradient(
                             colors: [.white.opacity(0.18), .clear, .black.opacity(0.12)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         Button(action: onClearImage) {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 24))
@@ -489,7 +402,6 @@ private struct WalletCardRow: View {
                 }
             }
             .frame(width: width, height: height)
-            .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
             .contentShape(Rectangle())
             .onTapGesture { onPickImage() }
         }
@@ -497,7 +409,7 @@ private struct WalletCardRow: View {
 
     private var placeholder: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
@@ -508,34 +420,15 @@ private struct WalletCardRow: View {
                         endPoint: .bottomTrailing
                     )
                 )
-
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(
-                    Color.secondary.opacity(0.25),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-                )
-
-            VStack(alignment: .leading) {
-                HStack {
-                    Image(systemName: "wave.3.right")
-                        .font(.system(size: 15))
-                        .foregroundStyle(.secondary.opacity(0.6))
-                    Spacer()
-                    Image(systemName: "creditcard")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.secondary.opacity(0.5))
-                }
-                .padding(14)
-                Spacer()
-            }
-
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(AppPalette.accent.opacity(0.35),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [8, 5]))
             VStack(spacing: 8) {
                 Image(systemName: "photo.badge.plus")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.blue)
+                    .font(.system(size: 28))
+                    .foregroundStyle(AppPalette.accent)
                 Text("Assign Card Skin")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 14, weight: .semibold))
                 Text("Tap to choose photo")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -547,6 +440,7 @@ private struct WalletCardRow: View {
         HStack(spacing: 8) {
             Toggle("", isOn: Binding(get: { card.isSelected }, set: onToggleSelected))
                 .labelsHidden()
+                .tint(AppPalette.accent)
 
             Text("Card #\(index + 1)")
                 .font(.system(size: 13, weight: .semibold))
@@ -555,7 +449,6 @@ private struct WalletCardRow: View {
                 Text(card.id.prefix(8) + "…" + card.id.suffix(6))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
-
                 Button {
                     UIPasteboard.general.string = card.id
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -564,41 +457,37 @@ private struct WalletCardRow: View {
                 } label: {
                     Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
                         .font(.system(size: 10))
-                        .foregroundStyle(copied ? .green : .secondary)
+                        .foregroundStyle(copied ? AppPalette.success : Color.secondary)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color(uiColor: .systemFill))
-            .clipShape(Capsule())
+            .background(Color(uiColor: .systemFill),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Spacer()
 
             if card.hasImage {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AppPalette.success)
                     .font(.system(size: 14))
             }
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")
                     .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppPalette.danger)
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 4)
     }
 }
 
-/// Bridges a `UIImagePickerController` into the SwiftUI tree.
-///
-/// The page cannot hold the controller itself — a `UIViewControllerRepresentable`
-/// has to own it, and the picker must be presented from the key window's top
-/// view controller, which a SwiftUI page does not have a handle on.
+// MARK: - Picker bridge
+
 private final class ImagePickerDelegate: NSObject, UIImagePickerControllerDelegate,
                                       UINavigationControllerDelegate {
     private let onPick: (UIImage?) -> Void
