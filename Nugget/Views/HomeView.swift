@@ -44,7 +44,7 @@ struct HomeView: View {
     @State private var mediaTotals: MediaTotals?
     @State private var restoringMedia = false
     @State private var connectionExpanded = false
-    @State private var tunnelSummary = "not probed"
+    @State private var tunnelSummary = "chưa kiểm tra"
     @State private var peerReachable: Bool?
     @ObservedObject private var runLog = RunLog.shared
 
@@ -109,15 +109,15 @@ struct HomeView: View {
                 GoldenNuggetEngine.shared.startAutomaticMediaPull(reason: "app launch")
             }
         }
-        .alert("Error", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
-            Button("OK") {}
+        .alert("Lỗi", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
+            Button("Đóng") {}
         } message: {
             Text(errorText ?? "?")
         }
-        .alert("Applied", isPresented: $showRebootNotice) {
-            Button("OK") {}
+        .alert("Đã áp dụng", isPresented: $showRebootNotice) {
+            Button("Đóng") {}
         } message: {
-            Text("Reboot the target device so the injected preferences take effect.")
+            Text("Khởi động lại thiết bị để các tùy chỉnh đã đưa vào có hiệu lực.")
         }
         .sheet(isPresented: $showResetSheet) {
             ResetPagesSheet(deviceVersion: identity.version,
@@ -141,17 +141,21 @@ struct HomeView: View {
     }
 
     // MARK: - Hero
+    //
+    // Thẻ đầu trang: logo, tên, mô tả thiết bị, nút làm mới, hai chip
+    // trạng thái. Không icon badge tròn — chỉ logo + chữ + chip material.
 
     private var heroCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 14) {
-                    NativeLogo(size: 56)
-                    VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .center, spacing: 14) {
+                    NativeLogo(size: 52)
+                        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("iOSCustomize")
-                            .font(.system(size: 20, weight: .bold))
+                            .font(.title3.weight(.bold))
                         Text(identity.describe)
-                            .font(.subheadline)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -164,10 +168,13 @@ struct HomeView: View {
                         }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 36, height: 36)
-                            .background(Color.primary.opacity(0.06), in: Circle())
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                            .frame(width: 34, height: 34)
+                            .background(
+                                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                    .fill(.ultraThinMaterial)
+                            )
                             .rotationEffect(.degrees(readingDevice ? 360 : 0))
                             .animation(
                                 readingDevice
@@ -188,7 +195,7 @@ struct HomeView: View {
                             : "circle.dashed"
                     )
                     AppChip(
-                        text: "\(tweakSelection.enabledCount) tweaks",
+                        text: "\(tweakSelection.enabledCount) tinh chỉnh",
                         tone: tweakSelection.enabledCount > 0 ? .accent : .secondary,
                         systemImage: "slider.horizontal.3"
                     )
@@ -199,9 +206,9 @@ struct HomeView: View {
     }
 
     private var connectionState: (text: String, tone: GoldenTone) {
-        guard paired else { return ("Not connected", .secondary) }
-        guard !identity.version.isEmpty else { return ("Partially supported", .warning) }
-        return ("Connected", .success)
+        guard paired else { return ("Chưa kết nối", .secondary) }
+        guard !identity.version.isEmpty else { return ("Hỗ trợ một phần", .warning) }
+        return ("Đã kết nối", .success)
     }
 
     // MARK: - Apply
@@ -209,9 +216,9 @@ struct HomeView: View {
     private var applyCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
-                AppCardHeader(icon: "bolt.fill", title: "Apply")
+                AppCardHeader(icon: "bolt.fill", title: "Áp dụng")
                 AppButton(
-                    title: running ? "Applying…" : applyTitle,
+                    title: running ? "Đang áp dụng…" : applyTitle,
                     systemImage: running ? nil : "bolt.fill",
                     running: running,
                     disabled: !canApply
@@ -221,7 +228,7 @@ struct HomeView: View {
                 if running {
                     progressRow
                     AppButton(
-                        title: "Stop run",
+                        title: "Dừng chạy",
                         systemImage: "stop.fill",
                         destructive: true
                     ) {
@@ -239,10 +246,10 @@ struct HomeView: View {
                 .tint(AppPalette.accent)
                 .opacity(progress == nil ? 0.3 : 1)
             HStack {
-                Text(progress == nil ? "Working…" : "\(Int(progress ?? 0))%")
+                Text(progress == nil ? "Đang xử lý…" : "\(Int(progress ?? 0))%")
                 if !eta.isEmpty {
                     Spacer()
-                    Text("≈ \(eta) remaining")
+                    Text("còn ~ \(eta)")
                 }
             }
             .font(.caption)
@@ -262,16 +269,16 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 12) {
                 AppCardHeader(
                     icon: "photo.on.rectangle.angled",
-                    title: "Media",
+                    title: "Phương tiện",
                     trailing: AnyView(
                         Button {
                             openDestination(.media)
                         } label: {
                             HStack(spacing: 2) {
-                                Text("Manage")
-                                    .font(.system(size: 13, weight: .semibold))
+                                Text("Quản lý")
+                                    .font(.footnote.weight(.semibold))
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.system(size: 9, weight: .bold))
                             }
                             .foregroundStyle(AppPalette.accent)
                         }
@@ -279,16 +286,16 @@ struct HomeView: View {
                     )
                 )
                 if let totals = mediaTotals, totals.files > 0 {
-                    Text("\(totals.files) file(s) · "
+                    Text("\(totals.files) tệp · "
                         + ByteCountFormatter.string(fromByteCount: totals.bytes, countStyle: .file))
                         .font(.subheadline)
                 } else {
-                    Text("No photos or videos copied yet")
+                    Text("Chưa có ảnh hoặc video nào")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 AppButton(
-                    title: restoringMedia ? "Restoring…" : "Restore media",
+                    title: restoringMedia ? "Đang khôi phục…" : "Khôi phục phương tiện",
                     systemImage: "arrow.uturn.backward.circle",
                     running: restoringMedia,
                     disabled: !canRestoreMedia
@@ -315,16 +322,16 @@ struct HomeView: View {
     private func restoreMedia() {
         restoringMedia = true
         RunLog.shared.clear()
-        showStatus("Restoring media…", .accent, autoHide: false)
+        showStatus("Đang khôi phục phương tiện…", .accent, autoHide: false)
         Task {
             var text = ""
             var tone: GoldenTone = .primary
             do {
                 try await GoldenNuggetEngine.shared.restoreMedia()
-                text = "Media restored to the device."
+                text = "Đã khôi phục phương tiện lên thiết bị."
                 tone = .success
             } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ stopped by the user (\(failure.label))"
+                text = "⏹ đã dừng (\(failure.label))"
                 tone = .warning
             } catch {
                 text = "❌ \(error.localizedDescription)"
@@ -344,23 +351,23 @@ struct HomeView: View {
         AppCard(padding: 0) {
             VStack(spacing: 0) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeOut(duration: 0.18)) {
                         connectionExpanded.toggle()
                     }
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: 10) {
                         Image(systemName: paired
                               ? "checkmark.seal.fill"
                               : "doc.badge.plus")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(paired ? AppPalette.success : AppPalette.accent)
-                        Text(paired ? "Pairing & tunnel" : "Pair the device")
-                            .font(.system(size: 15, weight: .semibold))
+                        Text(paired ? "Ghép nối & đường hầm" : "Ghép nối thiết bị")
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                         Spacer()
                         Image(systemName: connectionExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(.tertiary)
                     }
                     .padding(AppPalette.sCard)
                     .contentShape(Rectangle())
@@ -397,7 +404,8 @@ struct HomeView: View {
             Button {
                 resetPairing()
             } label: {
-                Label("Reset pairing file", systemImage: "arrow.counterclockwise")
+                Label("Đặt lại tệp ghép nối", systemImage: "arrow.counterclockwise")
+                    .font(.subheadline)
             }
         } else if wirelessPair.isRunning {
             wirelessPairProgress
@@ -405,12 +413,14 @@ struct HomeView: View {
             Button {
                 showPairingImporter.toggle()
             } label: {
-                Label("Select Pairing File", systemImage: "doc.badge.plus")
+                Label("Chọn tệp ghép nối", systemImage: "doc.badge.plus")
+                    .font(.subheadline)
             }
             Button {
                 wirelessPair.start()
             } label: {
-                Label("Pair Wirelessly", systemImage: "wifi")
+                Label("Ghép nối không dây", systemImage: "wifi")
+                    .font(.subheadline)
             }
             if case .failed(let message) = wirelessPair.phase {
                 NativeSafetyNote(message)
@@ -422,64 +432,67 @@ struct HomeView: View {
     private var wirelessPairProgress: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                ProgressView()
-                Text(wirelessPair.serviceName.map { "Advertising “\($0)” — waiting…" } ?? "Starting…")
-                    .font(.subheadline)
+                ProgressView().controlSize(.small).tint(AppPalette.accent)
+                Text(wirelessPair.serviceName.map { "Đang quảng bá “\($0)” — chờ…" } ?? "Đang khởi động…")
+                    .font(.footnote)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let pin = wirelessPair.pin {
-                Text("PIN: \(pin)")
+                Text("Mã PIN: \(pin)")
                     .font(.title3.monospaced().weight(.semibold))
+                    .foregroundStyle(AppPalette.accent)
                     .textSelection(.enabled)
-                NativeNote("Confirm this PIN in Settings → Privacy & Security → Developer Mode.")
+                NativeNote("Xác nhận PIN trong Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển.")
             } else {
-                NativeNote("Leave this screen open, then open Settings → Privacy & Security → Developer Mode on this iPhone.")
+                NativeNote("Giữ màn hình này mở, rồi vào Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển trên iPhone này.")
             }
             Button(role: .destructive) {
                 wirelessPair.cancel()
             } label: {
-                Label("Cancel pairing", systemImage: "xmark.circle")
+                Label("Huỷ ghép nối", systemImage: "xmark.circle")
+                    .font(.footnote)
+                    .foregroundStyle(AppPalette.danger)
             }
         }
     }
 
     private var tunnelEditor: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Tunnel addresses").font(.headline)
-            NativeNote("How this app finds the LocalDevVPN tunnel. These steer this app only.")
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tunnel IP (this device)").font(.caption).foregroundStyle(.secondary)
-                TextField("Tunnel IP", text: $tunnelIfaceIP)
+            Text("Địa chỉ đường hầm").font(.subheadline.weight(.semibold))
+            NativeNote("Cách app này tìm đường hầm LocalDevVPN. Chỉ ảnh hưởng app này.")
+            VStack(alignment: .leading, spacing: 4) {
+                Text("IP đường hầm (thiết bị này)").font(.caption).foregroundStyle(.secondary)
+                TextField("IP đường hầm", text: $tunnelIfaceIP)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numbersAndPunctuation)
-                if !tunnelIfaceIPOK { NativeSafetyNote("Invalid IPv4.") }
+                if !tunnelIfaceIPOK { NativeSafetyNote("IPv4 không hợp lệ.") }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Peer IP (the VPN server)").font(.caption).foregroundStyle(.secondary)
-                TextField("Peer IP", text: $tunnelPeerIP)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("IP đối tác (máy chủ VPN)").font(.caption).foregroundStyle(.secondary)
+                TextField("IP đối tác", text: $tunnelPeerIP)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numbersAndPunctuation)
-                if !tunnelPeerIPOK { NativeSafetyNote("Invalid IPv4.") }
+                if !tunnelPeerIPOK { NativeSafetyNote("IPv4 không hợp lệ.") }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Lockdown port").font(.caption).foregroundStyle(.secondary)
-                TextField("Port", text: $tunnelPort)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Cổng Lockdown").font(.caption).foregroundStyle(.secondary)
+                TextField("Cổng", text: $tunnelPort)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numberPad)
                     .nativeKeyboardDone()
-                if !tunnelPortOK { NativeSafetyNote("Invalid port.") }
+                if !tunnelPortOK { NativeSafetyNote("Cổng không hợp lệ.") }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Tunnel IP prefix length").font(.caption).foregroundStyle(.secondary)
-                TextField("Prefix", text: $tunnelPrefixLength)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Độ dài tiền tố IP").font(.caption).foregroundStyle(.secondary)
+                TextField("Tiền tố", text: $tunnelPrefixLength)
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.numberPad)
                     .nativeKeyboardDone()
-                if !tunnelPrefixOK { NativeSafetyNote("Invalid prefix.") }
+                if !tunnelPrefixOK { NativeSafetyNote("Tiền tố không hợp lệ.") }
             }
-            NativeNote("Copy into LocalDevVPN: tunnel IP \(Tunnel.ifaceIP)/\(Tunnel.ifacePrefixLength), peer \(Tunnel.peerIP), port \(Tunnel.servicePort).")
+            NativeNote("Chép vào LocalDevVPN: tunnel \(Tunnel.ifaceIP)/\(Tunnel.ifacePrefixLength), peer \(Tunnel.peerIP), cổng \(Tunnel.servicePort).")
             Text("tunnel: \(tunnelSummary) · peer \(Tunnel.peerIP):\(Tunnel.servicePort) reachable: \(peerReachable.map(String.init) ?? "…")")
-                .font(.caption)
+                .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button {
@@ -490,7 +503,8 @@ struct HomeView: View {
                 tunnelPrefixLength = String(Tunnel.defaultPrefixLength)
                 Task { await refreshTunnelStatus() }
             } label: {
-                Label("Reset tunnel addresses", systemImage: "arrow.counterclockwise")
+                Label("Đặt lại mặc định", systemImage: "arrow.counterclockwise")
+                    .font(.footnote)
             }
         }
     }
@@ -506,17 +520,17 @@ struct HomeView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Reset",
+                              title: "Đặt lại",
                               tint: AppPalette.danger)
                 AppButton(
-                    title: "Reset tweaks to stock",
+                    title: "Đặt lại tinh chỉnh về mặc định",
                     systemImage: "arrow.counterclockwise",
                     disabled: running || resetting,
                     destructive: true
                 ) {
                     showResetSheet = true
                 }
-                NativeNote("Puts whole pages back to stock on the device.")
+                NativeNote("Đưa các trang đã chọn về trạng thái gốc trên thiết bị.")
             }
         }
     }
@@ -540,7 +554,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(
                     icon: "terminal",
-                    title: "Log",
+                    title: "Nhật ký",
                     trailing: AnyView(
                         Text("\(runLog.lines.count)")
                             .font(.caption.monospacedDigit())
@@ -562,7 +576,8 @@ struct HomeView: View {
                                 .id("log.tail")
                         }
                     }
-                    .frame(height: 180)
+                    .frame(height: 160)
+                    .scrollIndicators(.hidden)
                     .onChange(of: runLog.lines.count) { _, _ in
                         proxy.scrollTo("log.tail", anchor: .bottom)
                     }
@@ -588,32 +603,32 @@ struct HomeView: View {
         let names = [
             tweakSelection.hasPendingWrites
                 || tweakSelection.daemonModificationsEnabled
-                || !hotload.currentPolicy.forcedDaemonKeys.isEmpty ? "Tweaks" : nil,
-            posterBoardSelection.isActive ? "Wallpapers" : nil,
-            templateSelection.usesDomains ? "Templates" : nil,
+                || !hotload.currentPolicy.forcedDaemonKeys.isEmpty ? "Tinh chỉnh" : nil,
+            posterBoardSelection.isActive ? "Hình nền" : nil,
+            templateSelection.usesDomains ? "Mẫu" : nil,
         ].compactMap { $0 }
-        if names.isEmpty { return "Apply changes" }
-        return "Apply " + names.joined(separator: " & ")
+        if names.isEmpty { return "Áp dụng thay đổi" }
+        return "Áp dụng " + names.joined(separator: " & ")
     }
 
     private var applyNote: String {
-        var lines = ["One pass: every enabled tweak, plus the wallpapers and templates picked on their own pages. Reboot the device afterwards."]
+        var lines = ["Một lượt: mọi tinh chỉnh đang bật, cộng hình nền và mẫu đã chọn ở trang riêng. Khởi động lại thiết bị sau đó."]
         if posterBoardSelection.fullReset || !posterBoardSelection.resetModes.isEmpty {
-            lines.append("⚠️ A PosterBoard reset is armed (\(posterBoardSelection.describe)).")
+            lines.append("⚠️ Đang bật đặt lại PosterBoard (\(posterBoardSelection.describe)).")
         }
         if templateSelection.isActive {
             if !templateSelection.usesDomains {
-                lines.append("The only template selected asks for sparserestore, which is not implemented.")
+                lines.append("Mẫu duy nhất đang chọn cần sparserestore — chưa hỗ trợ.")
             }
             let blocked = templateSelection.undeliverable
             if !blocked.isEmpty {
-                lines.append("Left out: " + blocked.map { "\($0.template.title) — \($0.reason)" }.joined(separator: "; "))
+                lines.append("Bỏ qua: " + blocked.map { "\($0.template.title) — \($0.reason)" }.joined(separator: "; "))
             }
         }
         return lines.joined(separator: "\n\n")
     }
 
-    // MARK: - Logic
+    // MARK: - Logic (giữ nguyên)
 
     func resetPairing() {
         pairingFileRaw = nil
@@ -621,7 +636,7 @@ struct HomeView: View {
         autoImportDisabled = true
         didAutoStart = false
         RunLog.shared.clear()
-        GoldenNuggetEngine.shared.log("pairing reset: record cleared.")
+        GoldenNuggetEngine.shared.log("đã đặt lại ghép nối: đã xoá bản ghi.")
     }
 
     @discardableResult
@@ -636,7 +651,7 @@ struct HomeView: View {
         for (source, rawOpt) in candidates {
             guard let raw = rawOpt?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { continue }
             guard PairingRecord.usable(raw) else {
-                GoldenNuggetEngine.shared.log("pairing record rejected (\(source))")
+                GoldenNuggetEngine.shared.log("bản ghi ghép nối bị từ chối (\(source))")
                 continue
             }
             let onDisk = (try? String(contentsOf: dest, encoding: .utf8))?
@@ -740,7 +755,7 @@ struct HomeView: View {
         running = true
         runStarted = Date()
         RunLog.shared.clear()
-        showStatus("Applying…", .accent, autoHide: false)
+        showStatus("Đang áp dụng…", .accent, autoHide: false)
         let snapshot = tweakSelection
         let wallpapers = posterBoardSelection
         let statusBar = statusBarSelection
@@ -760,13 +775,13 @@ struct HomeView: View {
                                                                 isIPhone: device.isIPhone, deviceModel: device.productType,
                                                                 communityPayloads: try CommunityTemplateStore.shared.compile(version: device.version),
                                                                 communityPresetEntry: CommunityTemplateStore.shared.presetEntry)
-                text = "Applied. Reboot the device."
+                text = "Đã áp dụng. Khởi động lại thiết bị."
                 tone = .success
                 succeeded = true
             } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ stopped by the user (\(failure.label))"
+                text = "⏹ đã dừng (\(failure.label))"
                 tone = .warning
-                recordedError = "stopped by the user (\(failure.label))"
+                recordedError = "đã dừng bởi người dùng"
             } catch {
                 text = "❌ \(error.localizedDescription)"
                 tone = .error
@@ -795,7 +810,7 @@ struct HomeView: View {
         guard !pages.isEmpty else { return }
         resetting = true
         RunLog.shared.clear()
-        showStatus("Resetting \(pages.count) page(s)…", .accent, autoHide: false)
+        showStatus("Đang đặt lại \(pages.count) trang…", .accent, autoHide: false)
         Task {
             var text = ""
             var tone: GoldenTone = .primary
@@ -803,13 +818,13 @@ struct HomeView: View {
             var recordedError = ""
             do {
                 try await GoldenNuggetEngine.shared.resetPages(pages: pages)
-                text = "Reset done. Reboot the device."
+                text = "Đặt lại xong. Khởi động lại thiết bị."
                 tone = .success
                 succeeded = true
             } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ stopped by the user (\(failure.label))"
+                text = "⏹ đã dừng (\(failure.label))"
                 tone = .warning
-                recordedError = "stopped by the user (\(failure.label))"
+                recordedError = "đã dừng bởi người dùng"
             } catch {
                 text = "❌ \(error.localizedDescription)"
                 tone = .error
@@ -864,7 +879,7 @@ struct HomeView: View {
             }
             guard Tunnel.waitForTunnel(log: { line in GoldenNuggetEngine.shared.log(line) }) else {
                 DispatchQueue.main.async {
-                    errorText = "Tunnel not ready: \(Tunnel.peerIP):\(Tunnel.servicePort) unreachable."
+                    errorText = "Đường hầm chưa sẵn sàng: không kết nối được \(Tunnel.peerIP):\(Tunnel.servicePort)."
                 }
                 return
             }
@@ -899,7 +914,7 @@ struct HomeView: View {
                 } catch {
                     let tail = RustLog.tail()
                     DispatchQueue.main.async {
-                        errorText = "\(error.localizedDescription)\n\nLast minimuxer.log lines:\n\(tail)"
+                        errorText = "\(error.localizedDescription)\n\nDòng cuối minimuxer.log:\n\(tail)"
                     }
                 }
             }
