@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 extension URL {
     static var documents: URL {
@@ -27,4 +28,21 @@ func searchMatches(query: String, _ texts: String...) -> Bool {
     guard !words.isEmpty else { return true }
     let haystack = texts.joined(separator: " ")
     return words.allSatisfy { haystack.localizedCaseInsensitiveContains($0) }
+}
+
+// MARK: - Themed list helper
+//
+// A single line to give a `List`-based page the new background + accent without
+// converting it to cards. Used by `FilesView` (kept as a `List` because swipe
+// to delete and the context menu are the browser's usability) and by
+// `PartialExportSheet` (kept as a `List` for the same reason: a multi-select
+// sheet reads better as rows than as a grid of cards).
+
+extension View {
+    func appThemedList() -> some View {
+        self
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .tint(AppPalette.accent)
+    }
 }
