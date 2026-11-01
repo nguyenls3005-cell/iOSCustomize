@@ -9,6 +9,20 @@ import UIKit
 // `List(.insetGrouped)` layout because it is a stack of cards, not because it
 // is decorated.
 
+// MARK: - Palette
+//
+// The one accent the app paints with. A deep orange — the same family as
+// EnsWilde's — instead of the system blue, so a filled action is unambiguous
+// in a screenshot. Two depths: the fill, and a slightly darker one for the
+// bottom of any gradient that needs one.
+
+enum AppPalette {
+    /// The primary accent. Deep orange, ~#FF6B0D.
+    static let accent     = Color(red: 1.00, green: 0.42, blue: 0.05)
+    /// A darker shade for gradient ends and pressed states.
+    static let accentDeep = Color(red: 0.88, green: 0.31, blue: 0.02)
+}
+
 // MARK: - Notes
 
 /// A muted explanatory line: secondary, footnote, wraps rather than truncates.
@@ -64,6 +78,7 @@ struct NativePrimaryButton: View {
         }
         .buttonStyle(.glassProminent)
         .controlSize(.large)
+        .tint(AppPalette.accent)
         .disabled(running || disabled)
     }
 }
@@ -129,7 +144,7 @@ struct NativeLogo: View {
                     .overlay(
                         Image(systemName: "shippingbox.fill")
                             .font(.system(size: size * 0.4))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(AppPalette.accent)
                     )
             }
         }
@@ -158,7 +173,7 @@ extension GoldenTone {
         case .primary: return .primary
         case .secondary: return .secondary
         case .disabled: return Color(.tertiaryLabel)
-        case .accent: return .accentColor
+        case .accent: return AppPalette.accent
         case .success: return .green
         case .error: return .red
         case .warning: return .orange
@@ -218,7 +233,7 @@ struct AppCard<Content: View>: View {
 struct AppCardHeader: View {
     let icon: String
     let title: String
-    var tint: Color = .accentColor
+    var tint: Color = AppPalette.accent
     var trailing: AnyView? = nil
 
     var body: some View {
@@ -241,6 +256,10 @@ struct AppCardHeader: View {
 // A flat filled button: rounded rectangle, white text on the accent (or red)
 // fill. This is the HomeView's action primitive. It has no ring, no gradient,
 // no shadow — just a colour change and a corner radius.
+//
+// Argument order is fixed: title, systemImage, running, disabled, destructive,
+// action. `disabled` must precede `destructive`; calling `AppButton(title:,
+// systemImage:, destructive:, disabled:)` will not compile.
 
 struct AppButton: View {
     let title: String
@@ -268,7 +287,7 @@ struct AppButton: View {
             .padding(.vertical, 14)
             .foregroundStyle(.white)
             .background(
-                (destructive ? Color.red : Color.accentColor)
+                (destructive ? Color.red : AppPalette.accent)
                     .opacity(disabled ? 0.4 : 1),
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
