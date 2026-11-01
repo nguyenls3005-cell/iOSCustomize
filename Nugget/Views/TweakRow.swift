@@ -1,7 +1,5 @@
 import SwiftUI
 
-// Row tweak. InstantSwitch vẽ tay — bật tức thì, không phụ thuộc Toggle hệ thống.
-
 struct TweakRow: View, Equatable {
     @ObservedObject private var hotload = HotLoadService.shared
     private var safetyWarning: String? { hotload.currentPolicy.flag(for: spec) }
@@ -61,7 +59,11 @@ struct TweakRow: View, Equatable {
         }
     }
 
-    // MARK: - Toggle (custom, tức thì)
+    // MARK: - Toggle (dùng native iOS switch)
+    //
+    // Để nguyên cấu trúc Button bọc ngoài (tap đâu cũng bật), nhưng dùng
+    // Toggle gốc của iOS chỉ để hiển thị. `.allowsHitTesting(false)` để
+    // Toggle không chặn tap của Button.
 
     private var toggleRow: some View {
         Button {
@@ -70,7 +72,10 @@ struct TweakRow: View, Equatable {
             HStack(alignment: .top, spacing: 12) {
                 TweakRowLabel(title: spec.title, id: spec.id, detail: spec.detail)
                 Spacer(minLength: 8)
-                InstantSwitch(isOn: optimisticOn)
+                Toggle("", isOn: Binding(get: { optimisticOn }, set: { _ in }))
+                    .labelsHidden()
+                    .allowsHitTesting(false)
+                    .tint(AppPalette.accent)
             }
             .padding(.vertical, 6)
             .contentShape(Rectangle())
@@ -127,49 +132,6 @@ struct TweakRow: View, Equatable {
         lhs.spec.id == rhs.spec.id
             && lhs.isOnSnapshot == rhs.isOnSnapshot
             && lhs.displayValue == rhs.displayValue
-    }
-}
-
-// MARK: - InstantSwitch
-//
-// fillStyle trả 2 type khác nhau (LinearGradient vs Color) → opaque `some
-// ShapeStyle` không resolve được vì `_ConditionalContent` không conform
-// `ShapeStyle`. Phải bọc trong `AnyShapeStyle`.
-
-struct InstantSwitch: View {
-    let isOn: Bool
-
-    var body: some View {
-        ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule(style: .continuous)
-                .fill(fillStyle)
-                .frame(width: 50, height: 30)
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(
-                            isOn ? Color.white.opacity(0.20) : Color.primary.opacity(0.06),
-                            lineWidth: 0.5
-                        )
-                )
-            Circle()
-                .fill(.white)
-                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
-                .padding(2)
-                .frame(width: 30, height: 30)
-        }
-        .animation(.easeOut(duration: 0.14), value: isOn)
-    }
-
-    private var fillStyle: AnyShapeStyle {
-        if isOn {
-            AnyShapeStyle(LinearGradient(
-                colors: [AppPalette.accent, AppPalette.accentDeep],
-                startPoint: .top,
-                endPoint: .bottom
-            ))
-        } else {
-            AnyShapeStyle(Color(uiColor: .systemFill))
-        }
     }
 }
 
