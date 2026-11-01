@@ -13,7 +13,7 @@ struct HomeView: View {
     @State private var pairingFileURL: String?
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.openDestination) private var openDestination
-    
+
     @Binding var didAutoStart: Bool
     @Binding var autoImportDisabled: Bool
     @State private var running = false
@@ -22,12 +22,12 @@ struct HomeView: View {
     @State private var showRebootNotice = false
     @State private var errorText: String?
     @State private var runStarted: Date?
-    
+
     @Binding var tweakSelection: TweakSelection
     @Binding var posterBoardSelection: PosterBoardSelection
     @Binding var statusBarSelection: StatusBarSelection
     @Binding var templateSelection: TemplateSelection
-    
+
     @State private var autosaveTask: Task<Void, Never>?
     @ObservedObject private var deviceMonitor = DeviceIdentityMonitor.shared
     private var identity: DeviceIdentity { deviceMonitor.current }
@@ -46,6 +46,7 @@ struct HomeView: View {
     @State private var connectionExpanded = false
     @State private var tunnelSummary = "not probed"
     @State private var peerReachable: Bool?
+    @ObservedObject private var runLog = RunLog.shared
 
     init(tweakSelection: Binding<TweakSelection>,
          posterBoardSelection: Binding<PosterBoardSelection>,
@@ -62,17 +63,21 @@ struct HomeView: View {
     }
 
     var body: some View {
-        List {
-            header
-            connectionLine
-            applyCard
-            clearCard
-            mediaCard
-            if !status.isEmpty { processStatus }
-            connectionSection
-            RunLogCard()
+        ScrollView {
+            VStack(spacing: 12) {
+                heroCard
+                applyCard
+                mediaCard
+                connectionCard
+                resetCard
+                if !status.isEmpty { statusCard }
+                if !runLog.lines.isEmpty { logCard }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("iOSCustomize")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(navBarVisibility, for: .navigationBar)
@@ -103,7 +108,6 @@ struct HomeView: View {
                 GoldenNuggetEngine.shared.startAutomaticMediaPull(reason: "app launch")
             }
         }
-        // Đã xóa onOpenURL và onChange của wirelessPair vì đã có cơ chế khác hoặc bỏ qua cho gọn
         .alert("Error", isPresented: Binding(get: { errorText != nil }, set: { if !$0 { errorText = nil } })) {
             Button("OK") {}
         } message: {
@@ -135,86 +139,117 @@ struct HomeView: View {
         horizontalSizeClass == .compact ? .automatic : .hidden
     }
 
-    private var header: some View {
-        Section {
-            VStack(spacing: 12) {
-                NativeLogo(size: 80)
-                    .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
-                Text("iOSCustomize")
-                    .font(.title.bold())
-                Text(identity.describe)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                Button {
-                    Task {
-                        await readDevice()
-                        await refreshTunnelStatus()
-                    }
-                } label: {
-                    Label("Refresh Device", systemImage: "arrow.clockwise")
-                        .font(.caption.bold())
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(!(paired && !readingDevice))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .listRowBackground(Color.clear)
-        }
-    }
+    // MARK: - Hero
+    //
+    // Horizontal layout, left-aligned: logo on the left, name over the device
+    // description on the right, the refresh control on the far right. The status
+    // chips sit underneath. The old page centred everything in a vertical stack;
+    // this is the biggest visual difference from the previous layout.
 
-    private var connectionLine: some View {
-        Section {
-            Text(connectionState.text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(connectionState.tone.nativeColor)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.vertical, 4)
+    private var heroCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 14) {
+                    NativeLogo(size: 56)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("iOSCustomize")
+                            .font(.system(size: 20, weight: .bold))
+                        Text(identity.describe)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    Button {
+                        Task {
+                            await readDevice()
+                            await refreshTunnelStatus()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 36, height: 36)
+                            .background(
+                                Color.primary.opacity(0.06),
+                                in: Circle()
+                            )
+                            .rotationEffect(.degrees(readingDevice ? 360 : 0))
+                            .animation(
+                                readingDevice
+                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                    : .default,
+                                value: readingDevice
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!(paired && !readingDevice))
+                }
+                HStack(spacing: 8) {
+                    AppChip(
+                        text: connectionState.text,
+                        tone: connectionState.tone,
+                        systemImage: connectionState.tone == .success
+                            ? "checkmark.circle.fill"
+                            : "circle.dashed"
+                    )
+                    AppChip(
+                        text: "\(tweakSelection.enabledCount) tweaks",
+                        tone: tweakSelection.enabledCount > 0 ? .accent : .secondary,
+                        systemImage: "slider.horizontal.3"
+                    )
+                    Spacer(minLength: 0)
+                }
+            }
         }
     }
 
     private var connectionState: (text: String, tone: GoldenTone) {
         guard paired else { return ("Not connected", .secondary) }
-        guard !identity.version.isEmpty else { return ("Partially Supported", .warning) }
-        return ("Supported!", .success)
+        guard !identity.version.isEmpty else { return ("Partially supported", .warning) }
+        return ("Connected", .success)
     }
 
+    // MARK: - Apply
+    //
+    // Button first, note underneath. The old page put the note first, which
+    // pushed the button under the fold.
+
     private var applyCard: some View {
-        Section {
-            NativeNote(applyNote)
-            NativePrimaryButton(title: running ? "Applying…" : applyTitle,
-                                running: running,
-                                disabled: !canApply) {
-                applyTweaks()
-            }
-            if running {
-                TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                    let secs = Int(ctx.date.timeIntervalSince(runStarted ?? ctx.date))
-                    Text(elapsedText(secs))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                AppCardHeader(icon: "bolt.fill", title: "Apply")
+                AppButton(
+                    title: running ? "Applying…" : applyTitle,
+                    systemImage: running ? nil : "bolt.fill",
+                    running: running,
+                    disabled: !canApply
+                ) {
+                    applyTweaks()
                 }
-                progressView
-                NativeDangerButton(title: "Stop run") {
-                    GoldenNuggetEngine.shared.requestCancel()
+                if running {
+                    progressRow
+                    AppButton(
+                        title: "Stop run",
+                        systemImage: "stop.fill",
+                        destructive: true
+                    ) {
+                        GoldenNuggetEngine.shared.requestCancel()
+                    }
                 }
+                NativeNote(applyNote)
             }
         }
     }
 
-    private var progressView: some View {
+    private var progressRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             ProgressView(value: progress ?? 0, total: 100)
-                .progressViewStyle(.linear)
-                .tint(.orange)
-                .opacity(progress == nil ? 0.35 : 1)
+                .tint(.accentColor)
+                .opacity(progress == nil ? 0.3 : 1)
             HStack {
-                Text(progress == nil ? "working…" : String(format: "%.0f%%", progress ?? 0))
+                Text(progress == nil ? "Working…" : "\(Int(progress ?? 0))%")
                 if !eta.isEmpty {
                     Spacer()
                     Text("≈ \(eta) remaining")
@@ -225,15 +260,7 @@ struct HomeView: View {
         }
     }
 
-    private var clearCard: some View {
-        Section {
-            NativeDangerButton(title: "Reset Tweaks",
-                               disabled: running || resetting) {
-                showResetSheet = true
-            }
-            NativeNote("Puts whole pages back to stock on the device.")
-        }
-    }
+    // MARK: - Media
 
     private struct MediaTotals: Equatable {
         var files: Int
@@ -241,28 +268,43 @@ struct HomeView: View {
     }
 
     private var mediaCard: some View {
-        Section("Media") {
-            if let totals = mediaTotals, totals.files > 0 {
-                Text("\(totals.files) photo(s) and video(s) — "
-                    + ByteCountFormatter.string(fromByteCount: totals.bytes, countStyle: .file)
-                    + " kept in the app")
-                    .font(.subheadline)
-            } else {
-                Text("No photos or videos copied yet")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            NativePrimaryButton(title: restoringMedia ? "Restoring…" : "Restore media",
-                                systemImage: "arrow.uturn.backward.circle",
-                                running: restoringMedia,
-                                disabled: !canRestoreMedia) {
-                restoreMedia()
-            }
-            NativeNote("Writes every kept photo and video back to the device's Media folder.")
-            Button {
-                openDestination(.media)
-            } label: {
-                Label("Media page", systemImage: "photo.on.rectangle")
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                AppCardHeader(
+                    icon: "photo.on.rectangle.angled",
+                    title: "Media",
+                    trailing: AnyView(
+                        Button {
+                            openDestination(.media)
+                        } label: {
+                            HStack(spacing: 2) {
+                                Text("Manage")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .bold))
+                            }
+                            .foregroundStyle(.accent)
+                        }
+                        .buttonStyle(.plain)
+                    )
+                )
+                if let totals = mediaTotals, totals.files > 0 {
+                    Text("\(totals.files) file(s) · "
+                        + ByteCountFormatter.string(fromByteCount: totals.bytes, countStyle: .file))
+                        .font(.subheadline)
+                } else {
+                    Text("No photos or videos copied yet")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                AppButton(
+                    title: restoringMedia ? "Restoring…" : "Restore media",
+                    systemImage: "arrow.uturn.backward.circle",
+                    running: restoringMedia,
+                    disabled: !canRestoreMedia
+                ) {
+                    restoreMedia()
+                }
             }
         }
     }
@@ -306,68 +348,46 @@ struct HomeView: View {
         }
     }
 
-    private func performReset(pages: Set<ResetPage>) {
-        guard !pages.isEmpty else { return }
-        resetting = true
-        RunLog.shared.clear()
-        showStatus("Resetting \(pages.count) page(s)…", .accent, autoHide: false)
-        Task {
-            var text = ""
-            var tone: GoldenTone = .primary
-            var succeeded = false
-            var recordedError = ""
-            do {
-                try await GoldenNuggetEngine.shared.resetPages(pages: pages)
-                text = "Reset done. Reboot the device."
-                tone = .success
-                succeeded = true
-            } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ stopped by the user (\(failure.label))"
-                tone = .warning
-                recordedError = "stopped by the user (\(failure.label))"
-            } catch {
-                text = "❌ \(error.localizedDescription)"
-                tone = .error
-                recordedError = error.localizedDescription
-            }
-            let device = identity
-            ApplyHistory.record(mode: "reset",
-                                success: succeeded,
-                                error: recordedError,
-                                device: device.describe,
-                                model: device.productType,
-                                ios: device.version)
-            await MainActor.run {
-                resetting = false
-                showStatus(text, tone)
-                showRebootNotice = succeeded
-            }
-        }
-    }
+    // MARK: - Connection
 
-    @ViewBuilder
-    private var processStatus: some View {
-        Section {
-            Text(status)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(statusTone.nativeColor)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity, alignment: .center)
-        }
-    }
-
-    private var connectionSection: some View {
-        Section {
-            DisclosureGroup(isExpanded: $connectionExpanded) {
-                VStack(alignment: .leading, spacing: 14) {
-                    pairingRows
-                    Divider()
-                    tunnelEditor
+    private var connectionCard: some View {
+        AppCard(padding: 0) {
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        connectionExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: paired
+                              ? "checkmark.seal.fill"
+                              : "doc.badge.plus")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(paired ? Color.green : Color.accentColor)
+                        Text(paired ? "Pairing & tunnel" : "Pair the device")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: connectionExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 6)
-            } label: {
-                Label(paired ? "Pairing & tunnel" : "Pair the device",
-                      systemImage: paired ? "checkmark.seal.fill" : "doc.badge.plus")
+                .buttonStyle(.plain)
+
+                if connectionExpanded {
+                    Divider().padding(.horizontal, 16)
+                    VStack(alignment: .leading, spacing: 14) {
+                        pairingRows
+                        if paired {
+                            Divider()
+                            tunnelEditor
+                        }
+                    }
+                    .padding(16)
+                }
             }
         }
         .fileImporter(isPresented: $showPairingImporter,
@@ -490,20 +510,107 @@ struct HomeView: View {
     private var tunnelPortOK: Bool { Tunnel.validPort(tunnelPort) != nil }
     private var tunnelPrefixOK: Bool { Tunnel.validPrefixLength(tunnelPrefixLength) != nil }
 
+    // MARK: - Reset
+    //
+    // Its own card, separated from Apply on purpose: the two are one thumb away
+    // from each other and one is destructive. The card header uses the danger
+    // tone so the whole card reads as "this one does damage".
+
+    private var resetCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                AppCardHeader(icon: "exclamationmark.triangle.fill",
+                              title: "Reset",
+                              tint: .red)
+                AppButton(
+                    title: "Reset tweaks to stock",
+                    systemImage: "arrow.counterclockwise",
+                    destructive: true,
+                    disabled: running || resetting
+                ) {
+                    showResetSheet = true
+                }
+                NativeNote("Puts whole pages back to stock on the device.")
+            }
+        }
+    }
+
+    // MARK: - Status banner
+
+    private var statusCard: some View {
+        AppCard {
+            Text(status)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(statusTone.nativeColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - Log
+    //
+    // A card-wrapped terminal. `RunLogCard` still holds the tailing logic; the
+    // card here just gives it a header and a frame so the page reads as one
+    // stack, not a List that drops a section at the bottom.
+
+    private var logCard: some View {
+        AppCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(
+                    icon: "terminal",
+                    title: "Log",
+                    trailing: AnyView(
+                        Text("\(runLog.lines.count)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    )
+                )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(runLog.lines.suffix(80).enumerated()),
+                                    id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            Color.clear
+                                .frame(height: 1)
+                                .id("log.tail")
+                        }
+                    }
+                    .frame(height: 180)
+                    .onChange(of: runLog.lines.count) { _, _ in
+                        proxy.scrollTo("log.tail", anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Derived state
+
     private var paired: Bool { pairingFileURL != nil }
 
     private var canApply: Bool {
-        paired && !running && (!hotload.currentPolicy.forcedDaemonKeys.isEmpty || tweakSelection.hasPendingWrites || tweakSelection.daemonModificationsEnabled || posterBoardSelection.isActive
-                               || templateSelection.usesDomains || !community.templates.isEmpty)
+        paired && !running && (!hotload.currentPolicy.forcedDaemonKeys.isEmpty
+            || tweakSelection.hasPendingWrites
+            || tweakSelection.daemonModificationsEnabled
+            || posterBoardSelection.isActive
+            || templateSelection.usesDomains
+            || !community.templates.isEmpty)
     }
 
     private var applyTitle: String {
         let names = [
-            tweakSelection.hasPendingWrites || tweakSelection.daemonModificationsEnabled || !hotload.currentPolicy.forcedDaemonKeys.isEmpty ? "Tweaks" : nil,
+            tweakSelection.hasPendingWrites
+                || tweakSelection.daemonModificationsEnabled
+                || !hotload.currentPolicy.forcedDaemonKeys.isEmpty ? "Tweaks" : nil,
             posterBoardSelection.isActive ? "Wallpapers" : nil,
             templateSelection.usesDomains ? "Templates" : nil,
         ].compactMap { $0 }
-        if names.isEmpty { return "Apply" }
+        if names.isEmpty { return "Apply changes" }
         return "Apply " + names.joined(separator: " & ")
     }
 
@@ -523,6 +630,8 @@ struct HomeView: View {
         }
         return lines.joined(separator: "\n\n")
     }
+
+    // MARK: - Logic (unchanged from the previous file)
 
     func resetPairing() {
         pairingFileRaw = nil
@@ -701,6 +810,45 @@ struct HomeView: View {
         }
     }
 
+    private func performReset(pages: Set<ResetPage>) {
+        guard !pages.isEmpty else { return }
+        resetting = true
+        RunLog.shared.clear()
+        showStatus("Resetting \(pages.count) page(s)…", .accent, autoHide: false)
+        Task {
+            var text = ""
+            var tone: GoldenTone = .primary
+            var succeeded = false
+            var recordedError = ""
+            do {
+                try await GoldenNuggetEngine.shared.resetPages(pages: pages)
+                text = "Reset done. Reboot the device."
+                tone = .success
+                succeeded = true
+            } catch let failure as TransportFailure where failure.isCancellation {
+                text = "⏹ stopped by the user (\(failure.label))"
+                tone = .warning
+                recordedError = "stopped by the user (\(failure.label))"
+            } catch {
+                text = "❌ \(error.localizedDescription)"
+                tone = .error
+                recordedError = error.localizedDescription
+            }
+            let device = identity
+            ApplyHistory.record(mode: "reset",
+                                success: succeeded,
+                                error: recordedError,
+                                device: device.describe,
+                                model: device.productType,
+                                ios: device.version)
+            await MainActor.run {
+                resetting = false
+                showStatus(text, tone)
+                showRebootNotice = succeeded
+            }
+        }
+    }
+
     private func showStatus(_ text: String, _ tone: GoldenTone, autoHide: Bool = true) {
         status = text
         statusTone = tone
@@ -711,12 +859,6 @@ struct HomeView: View {
             try? await Task.sleep(nanoseconds: 6_000_000_000)
             await MainActor.run { if statusToken == token { status = "" } }
         }
-    }
-
-    private func elapsedText(_ seconds: Int) -> String {
-        let clock = "Elapsed \(seconds / 60)m \(seconds % 60)s"
-        guard let progress, !progress.isNaN else { return clock }
-        return "\(clock) · backup \(Int(progress))%"
     }
 
     private static let startLock = NSLock()
