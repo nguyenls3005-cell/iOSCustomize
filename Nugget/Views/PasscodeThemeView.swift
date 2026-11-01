@@ -13,21 +13,24 @@ struct PasscodeThemeView: View {
     @State private var showImporter = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                deviceCard
-                importCard
-                if let theme { previewCard(theme) }
-                optionsCard
-                applyCard
-                if let status { statusCard(status) }
-                if !log.isEmpty { logCard }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    deviceCard
+                    importCard
+                    if let theme { previewCard(theme) }
+                    optionsCard
+                    applyCard
+                    if let status { statusCard(status) }
+                    if !log.isEmpty { logCard }
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Passcode")
+        .tint(AppPalette.accent)
+        .navigationTitle("Mật mã")
         .navigationBarTitleDisplayMode(.inline)
         .task { identity = await DeviceIdentity.read() }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.data]) { result in
@@ -39,28 +42,36 @@ struct PasscodeThemeView: View {
         let reason = Airlift.unsupportedReason(deviceVersion: identity.version, buildVersion: identity.buildVersion)
         if !reason.isEmpty { return reason }
         if !FileManager.default.fileExists(atPath: AppPaths.pairingFile.path) {
-            return "AirLift needs a pairing record and none is stored. Import one on the home page."
+            return "AirLift cần tệp ghép nối. Nhập ở trang chủ."
         }
         return ""
     }
 
-    // MARK: - Cards
-
     private var deviceCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(identity.describe)
+            HStack(spacing: 12) {
+                Image(systemName: "lock.rectangle.fill")
                     .font(.system(size: 15, weight: .semibold))
-                NativeNote("The keypad's artwork is written into /var/mobile/Library/Caches/TelephonyUI-…, which is a cache rather than a preference, so a backup cannot carry it. Lock the device to see the result.")
-                if !blocker.isEmpty { NativeSafetyNote(blocker) }
+                    .foregroundStyle(AppPalette.accent)
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(AppPalette.accent.opacity(0.15)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(identity.describe).font(.subheadline.weight(.semibold))
+                    Text("Ghi vào cache TelephonyUI")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer()
             }
+            NativeNote("Artwork bàn phím ghi vào /var/mobile/Library/Caches/TelephonyUI-…, đây là cache chứ không phải preference, nên backup không mang theo. Khoá máy để xem kết quả.")
+            if !blocker.isEmpty { NativeSafetyNote(blocker) }
         }
     }
 
     private var importCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "square.and.arrow.down", title: "Theme archive")
+                AppCardHeader(icon: "square.and.arrow.down", title: "Tệp theme")
                 Button {
                     showImporter = true
                 } label: {
@@ -68,8 +79,8 @@ struct PasscodeThemeView: View {
                         Image(systemName: "square.and.arrow.down")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text(theme == nil ? "Import a .passthm" : "Import another")
-                            .font(.system(size: 15, weight: .medium))
+                        Text(theme == nil ? "Nhập .passthm" : "Nhập file khác")
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -78,7 +89,7 @@ struct PasscodeThemeView: View {
                 }
                 .buttonStyle(.plain)
                 if let theme {
-                    NativeNote("\(theme.name) — \(theme.fileCount) file(s), \(theme.keysPreview.count) key(s) found.")
+                    NativeNote("\(theme.name) — \(theme.fileCount) tệp, \(theme.keysPreview.count) phím tìm thấy.")
                 }
             }
         }
@@ -87,7 +98,7 @@ struct PasscodeThemeView: View {
     private func previewCard(_ theme: PasscodeThemeInfo) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "rectangle.grid.3x2", title: "Keys")
+                AppCardHeader(icon: "rectangle.grid.3x2", title: "Bàn phím")
                 ForEach(0..<4, id: \.self) { row in
                     HStack(spacing: 8) {
                         ForEach(0..<3, id: \.self) { column in
@@ -114,9 +125,7 @@ struct PasscodeThemeView: View {
                     .fill(.quaternary)
                     .frame(height: 44)
             }
-            Text(digit ?? "")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            Text(digit ?? "").font(.caption2).foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -124,32 +133,28 @@ struct PasscodeThemeView: View {
     private var optionsCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "slider.horizontal.3", title: "Options")
-                optionRow(title: "Language", selection: $language, choices: PasscodeLanguageTarget.allCases)
+                AppCardHeader(icon: "slider.horizontal.3", title: "Tuỳ chọn")
+                optionRow(title: "Ngôn ngữ", selection: $language, choices: PasscodeLanguageTarget.allCases)
                 AppDivider()
-                optionRow(title: "Weight", selection: $weight, choices: PasscodeBoldTarget.allCases)
-                NativeNote("The device asks for one file per locale, weight and key subtext. \"All languages\" writes every variant — it is the only setting that works on a device whose language you do not know — while the device's own locale and the fallback are always included either way.")
+                optionRow(title: "Độ đậm", selection: $weight, choices: PasscodeBoldTarget.allCases)
+                NativeNote("Thiết bị yêu cầu một tệp mỗi locale, weight và subtext phím. \"Tất cả ngôn ngữ\" ghi mọi biến thể — cách duy nhất khi không rõ ngôn ngữ máy — còn locale máy và fallback luôn có mặt.")
             }
         }
     }
 
     private func optionRow<Option: Identifiable & Hashable & RawRepresentable>(
-        title: String,
-        selection: Binding<Option>,
-        choices: [Option]
+        title: String, selection: Binding<Option>, choices: [Option]
     ) -> some View where Option.RawValue == String, Option.ID == String {
         Picker(title, selection: selection) {
-            ForEach(choices) { option in
-                Text(option.id).tag(option)
-            }
+            ForEach(choices) { option in Text(option.id).tag(option) }
         }
     }
 
     private var applyCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "lock.rectangle.stack.fill", title: "Apply")
-                AppButton(title: running ? "Applying…" : "Apply theme",
+                AppCardHeader(icon: "lock.rectangle.stack.fill", title: "Áp dụng")
+                AppButton(title: running ? "Đang áp dụng…" : "Áp dụng theme",
                           systemImage: "lock.rectangle.stack.fill",
                           running: running,
                           disabled: running || theme == nil || !blocker.isEmpty) {
@@ -163,7 +168,7 @@ struct PasscodeThemeView: View {
     private func statusCard(_ text: String) -> some View {
         AppCard {
             Text(text)
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(tone.nativeColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -171,9 +176,9 @@ struct PasscodeThemeView: View {
     }
 
     private var logCard: some View {
-        AppCard(padding: 14) {
+        AppCard(padding: 12) {
             VStack(alignment: .leading, spacing: 6) {
-                AppCardHeader(icon: "terminal", title: "Log")
+                AppCardHeader(icon: "terminal", title: "Nhật ký")
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(log.enumerated()), id: \.offset) { _, line in
@@ -185,11 +190,10 @@ struct PasscodeThemeView: View {
                     }
                 }
                 .frame(height: 180)
+                .scrollIndicators(.hidden)
             }
         }
     }
-
-    // MARK: - Actions
 
     private func importTheme(_ result: Result<URL, Error>) {
         switch result {
@@ -200,7 +204,7 @@ struct PasscodeThemeView: View {
                 do {
                     let loaded = try await PasscodeThemeReader.inspect(url: url)
                     theme = loaded
-                    status = "Loaded \(loaded.name)."
+                    status = "Đã tải \(loaded.name)."
                     tone = .primary
                 } catch {
                     status = error.localizedDescription
@@ -228,7 +232,7 @@ struct PasscodeThemeView: View {
                     log: { line in Task { @MainActor in log.append(line) } },
                     progress: { _ in }
                 )
-                status = "Theme applied. Lock the device to see it."
+                status = "Đã áp dụng theme. Khoá máy để xem."
                 tone = .primary
             } catch {
                 status = error.localizedDescription
