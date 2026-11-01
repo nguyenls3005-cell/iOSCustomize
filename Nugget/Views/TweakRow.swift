@@ -1,58 +1,104 @@
 import SwiftUI
 
-/// One tweak row: its title, the control its kind calls for, and its id.
+/// Một dòng tweak. Đã tối ưu để toggle phản hồi tức thì:
 ///
-/// Used inside `AppCard` sections in the redesigned Tweaks and Daemons pages,
-/// so this row itself has no card chrome — only the small inner padding that
-/// separates one row from the next. The read/write of the toggle is injected
-/// because the two pages disagree about what "on" means.
-struct TweakRow: View {
+/// 1. **`Equatable`** — SwiftUI chỉ re-render row khi tweak của chính nó đổi.
+///    Bật 1 tweak không còn làm 100+ row khác diff lại.
+/// 2. **`@State optimisticOn`** — gạt là thấy ngay, không chờ `selection`
+///    cập nhật xong mới đổi hình. Nếu tweak có cảnh báo, alert hiện ra,
+///    Huỷ thì gạt về, Tiếp tục thì commit.
+/// 3. **Callback** thay `@Binding` — row không còn tự mutate selection, nên
+///    SwiftUI không diff toàn bộ cây view khi 1 toggle đổi.
+struct TweakRow: View, Equatable {
     @ObservedObject private var hotload = HotLoadService.shared
-    @ObservedObject private var device = DeviceIdentityMonitor.shared
     private var safetyWarning: String? { hotload.currentPolicy.flag(for: spec) }
     private var warningText: String {
         [spec.warning, safetyWarning].compactMap { $0 }.joined(separator: "\n\n")
     }
+
     let spec: TweakSpec
-    @Binding private var selection: TweakSelection
-    private let readOn: () -> Bool
-    private let writeOn: (Bool) -> Void
+    /// Snapshot giá trị hiện tại của tweak này. Dùng cho `==` để biết có cần
+    /// re-render không, và cho alert hiển thị đúng trạng thái.
+    private let isOnSnapshot: Bool
+    private let displayValue: String
+
+    private let onToggle: (Bool) -> Void
+    private let onTextChange: (String) -> Void
+    private let onValueChange: (TweakValue) -> Void
+
+    @State private var optimisticOn: Bool
     @State private var showWarning = false
 
+    // MARK: - Khởi tạo (giữ tương thích 2 signature cũ)
+
     init(spec: TweakSpec, selection: Binding<TweakSelection>) {
-        self.init(spec: spec, selection: selection, readOn: nil, writeOn: nil)
+        self.init(spec: spec,
+                  selection: selection.wrappedValue,
+                  onToggle: { on in selection.wrappedValue.setOn(on, for: spec) },
+                  onTextChange: { selection.wrappedValue.setValue(.string($0), for: spec) },
+                  onValueChange: { selection.wrappedValue.setValue($0, for: spec) })
     }
 
     init(spec: TweakSpec, selection: Binding<TweakSelection>,
          isOn: @escaping () -> Bool, setOn: @escaping (Bool) -> Void) {
-        self.init(spec: spec, selection: selection, readOn: isOn, writeOn: setOn)
+        self.init(spec: spec,
+                  selection: selection.wrappedValue,
+                  isOnOverride: isOn,
+                  onToggle: setOn,
+                  onTextChange: { selection.wrappedValue.setValue(.string($0), for: spec) },
+                  onValueChange: { selection.wrappedValue.setValue($0, for: spec) })
     }
 
-    private init(spec: TweakSpec, selection: Binding<TweakSelection>,
-                 readOn: (() -> Bool)?, writeOn: ((Bool) -> Void)?) {
+    // Init chính (dùng snapshot + callback)
+    private init(spec: TweakSpec,
+                 selection: TweakSelection,
+                 isOnOverride: (() -> Bool)? = nil,
+                 onToggle: @escaping (Bool) -> Void,
+                 onTextChange: @escaping (String) -> Void,
+                 onValueChange: @escaping (TweakValue) -> Void) {
         self.spec = spec
-        self._selection = selection
-        self.readOn = readOn ?? { selection.wrappedValue.isOn(spec) }
-        self.writeOn = writeOn ?? { selection.wrappedValue.setOn($0, for: spec) }
+        self.isOnSnapshot = (isOnOverride ?? { selection.isOn(spec) })()
+        self.displayValue = selection.value(for: spec).display
+        self.onToggle = onToggle
+        self.onTextChange = onTextChange
+        self.onValueChange = onValueChange
+        self._optimisticOn = State(initialValue: (isOnOverride ?? { selection.isOn(spec) })())
     }
+
+    // MARK: - Body
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             switch spec.kind {
             case .toggle:
-                Toggle(isOn: toggleBinding) {
+                Toggle(isOn: Binding(
+                    get: { optimisticOn },
+                    set: { newValue in
+                        if newValue && !warningText.isEmpty {
+                            // hiện gạt ngay, hỏi sau
+                            optimisticOn = true
+                            showWarning = true
+                        } else {
+                            optimisticOn = newValue
+                            onToggle(newValue)
+                        }
+                    }
+                )) {
                     TweakRowLabel(title: spec.title, id: spec.id, detail: spec.detail)
+                        .contentShape(Rectangle())
                 }
                 .tint(AppPalette.accent)
             case .text:
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(spec.title)
-                        .font(.system(size: 15, weight: .medium))
+                    Text(spec.title).font(.subheadline.weight(.medium))
                     if let safetyWarning { NativeSafetyNote(safetyWarning) }
-                    TextField("(empty = clear)", text: textBinding)
-                        .textFieldStyle(.roundedBorder)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
+                    TextField("(trống = xoá)", text: Binding(
+                        get: { displayValue },
+                        set: { onTextChange($0) }
+                    ))
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
                     TweakRowCaption(
                         id: spec.id,
                         detail: [spec.detail, spec.warning].compactMap { $0 }.joined(separator: "\n")
@@ -60,10 +106,9 @@ struct TweakRow: View {
                 }
             case .number:
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(spec.title)
-                        .font(.system(size: 15, weight: .medium))
+                    Text(spec.title).font(.subheadline.weight(.medium))
                     if let safetyWarning { NativeSafetyNote(safetyWarning) }
-                    TweakNumberField(spec: spec, selection: $selection)
+                    TweakNumberField(spec: spec, display: displayValue, onChange: onValueChange)
                     TweakRowCaption(
                         id: spec.id,
                         detail: [spec.numberHint, spec.warning].compactMap { $0 }.joined(separator: "\n")
@@ -73,46 +118,40 @@ struct TweakRow: View {
             if spec.kind == .toggle, let safetyWarning { NativeSafetyNote(safetyWarning) }
         }
         .alert(spec.title, isPresented: $showWarning) {
-            Button("Cancel", role: .cancel) {}
-            Button("Continue anyway", role: .destructive) { writeOn(true) }
+            Button("Huỷ", role: .cancel) { optimisticOn = false }
+            Button("Vẫn tiếp tục", role: .destructive) {
+                onToggle(true)
+            }
         } message: {
             Text(warningText)
         }
     }
 
-    private var toggleBinding: Binding<Bool> {
-        Binding(get: readOn, set: { on in
-            if on && !warningText.isEmpty { showWarning = true }
-            else { writeOn(on) }
-        })
-    }
+    // MARK: - Diffing
 
-    private var textBinding: Binding<String> {
-        Binding(get: {
-            if case .string(let value) = selection.value(for: spec) { return value }
-            return selection.value(for: spec).display
-        }, set: { selection.setValue(.string($0), for: spec) })
+    static func == (lhs: TweakRow, rhs: TweakRow) -> Bool {
+        lhs.spec.id == rhs.spec.id
+            && lhs.isOnSnapshot == rhs.isOnSnapshot
+            && lhs.displayValue == rhs.displayValue
     }
 }
 
-/// A numeric editor that keeps its own draft text.
-///
-/// Unchanged from the original: the draft is seeded once in `init`, and the
-/// selection only writes back when a valid value can be parsed. See the
-/// original comment for why `onAppear` seeding was a bug.
+/// Numeric editor giữ draft riêng — không cần Binding, chỉ cần display + callback.
 struct TweakNumberField: View {
     let spec: TweakSpec
-    @Binding var selection: TweakSelection
+    let display: String
+    let onChange: (TweakValue) -> Void
     @State private var draft: String
 
-    init(spec: TweakSpec, selection: Binding<TweakSelection>) {
+    init(spec: TweakSpec, display: String, onChange: @escaping (TweakValue) -> Void) {
         self.spec = spec
-        self._selection = selection
-        self._draft = State(initialValue: selection.wrappedValue.value(for: spec).display)
+        self.display = display
+        self.onChange = onChange
+        self._draft = State(initialValue: display)
     }
 
     var body: some View {
-        TextField("value", text: $draft)
+        TextField("giá trị", text: $draft)
             .keyboardType(.decimalPad)
             .nativeKeyboardDone()
             .textInputAutocapitalization(.never)
@@ -120,15 +159,13 @@ struct TweakNumberField: View {
             .textFieldStyle(.roundedBorder)
             .onChange(of: draft) { _, newValue in
                 if let value = spec.numberValue(from: newValue) {
-                    selection.setValue(value, for: spec)
+                    onChange(value)
                 }
             }
-            .onSubmit { draft = selection.value(for: spec).display }
+            .onSubmit { draft = display }
     }
 }
 
-/// A toggle row's label: the title, its registry id in the caption style, and
-/// the registry's description when it has one.
 private struct TweakRowLabel: View {
     let title: String
     let id: String
@@ -136,20 +173,15 @@ private struct TweakRowLabel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 15, weight: .medium))
+            Text(title).font(.subheadline.weight(.medium))
             Text(id)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.tertiary)
-            if let detail {
-                NativeNote(detail)
-            }
+            if let detail { NativeNote(detail) }
         }
     }
 }
 
-/// The caption block under a field row: the registry id, then the hint or
-/// description.
 private struct TweakRowCaption: View {
     let id: String
     let detail: String?
@@ -159,9 +191,7 @@ private struct TweakRowCaption: View {
             Text(id)
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.tertiary)
-            if let detail {
-                NativeNote(detail)
-            }
+            if let detail { NativeNote(detail) }
         }
     }
 }
