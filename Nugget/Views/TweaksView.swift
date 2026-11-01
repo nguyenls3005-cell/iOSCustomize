@@ -22,17 +22,21 @@ struct TweaksView: View {
     @State private var searchText = ""
 
     var body: some View {
-        List {
-            identitySection
-            importSection
-            templatesLinkSection // Thêm link qua Templates
-            if searchActive && visibleSpecs.isEmpty { emptySearchSection }
-            tweakSections
-            if let importReport { reportSection(importReport) }
-            if let importError { errorSection(importError) }
-            if !tail.isEmpty { logSection }
+        ScrollView {
+            VStack(spacing: AppPalette.sGap) {
+                identityCard
+                importCard
+                templatesLinkCard
+                if searchActive && visibleSpecs.isEmpty { emptySearchCard }
+                tweakCards
+                if let importReport { reportCard(importReport) }
+                if let importError { errorCard(importError) }
+                if !tail.isEmpty { logCard }
+            }
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Tweaks")
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
@@ -78,98 +82,164 @@ struct TweaksView: View {
             })
     }
 
-    private var identitySection: some View {
-        Section {
-            Text(identity.describe)
-                .font(.headline)
-            NativeNote("\(selection.enabledCount) of \(visibleSpecs.count) applicable tweak(s) enabled.")
+    private var identityCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(identity.describe)
+                    .font(.system(size: 15, weight: .semibold))
+                NativeNote("\(selection.enabledCount) of \(visibleSpecs.count) applicable tweak(s) enabled.")
+            }
         }
     }
 
-    // Thêm section link tới Templates
-    private var templatesLinkSection: some View {
-        Section("Templates") {
-            NavigationLink(destination: TemplatesView(selection: .constant(TemplateSelection()))) { // Cần truyền thật
-                Label("Manage Templates", systemImage: "slider.horizontal.below.rectangle")
+    private var templatesLinkCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "slider.horizontal.below.rectangle",
+                              title: "Templates")
+                NavigationLink(destination: TemplatesView(selection: .constant(TemplateSelection()))) {
+                    HStack(spacing: 10) {
+                        Text("Manage Templates")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                NativeNote("Apply custom `.batter` templates along with your tweaks.")
             }
-            NativeNote("Apply custom `.batter` templates along with your tweaks.")
         }
     }
 
-    private var importSection: some View {
-        Section("Saved state") {
-            Button {
-                showImporter = true
-            } label: {
-                Label("Import autosave.json", systemImage: "square.and.arrow.down")
-            }
-            .disabled(running)
+    private var importCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "tray.and.arrow.down.fill", title: "Saved state")
+                Button {
+                    showImporter = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                        Text("Import autosave.json")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(running)
 
-            Button(role: .destructive) {
-                selection.removeAll()
-                importReport = nil
-                importError = nil
-                GoldenNuggetAutosave.clear()
-            } label: {
-                Label("Clear all tweaks", systemImage: "xmark.circle")
-            }
-            .disabled(running || selection.enabledCount == 0)
+                AppDivider()
 
-            NativeNote(autosaveNote)
+                Button(role: .destructive) {
+                    selection.removeAll()
+                    importReport = nil
+                    importError = nil
+                    GoldenNuggetAutosave.clear()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "xmark.circle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.danger)
+                        Text("Clear all tweaks")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(AppPalette.danger)
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(running || selection.enabledCount == 0)
+
+                NativeNote(autosaveNote)
+            }
         }
     }
 
     @ViewBuilder
-    private var tweakSections: some View {
+    private var tweakCards: some View {
         ForEach(TweakSection.allCases.filter { $0 != .daemons }) { section in
             let specs = visibleSpecs.filter { $0.section == section }
             if !specs.isEmpty {
                 let on = specs.filter { selection.isOn($0) }.count
                 let collapsed = collapsedBinding(for: section, specs: specs)
-                Section {
-                    if !collapsed.wrappedValue {
-                        ForEach(specs, id: \.id) { spec in
-                            TweakRow(spec: spec, selection: $selection)
-                                .id("\(spec.id)#\(formEpoch)")
+                AppCard(padding: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        NativeCollapsibleHeader(
+                            title: "\(section.rawValue) (\(on)/\(specs.count))",
+                            collapsed: collapsed)
+                        if !collapsed.wrappedValue {
+                            ForEach(Array(specs.enumerated()), id: \.element.id) { idx, spec in
+                                TweakRow(spec: spec, selection: $selection)
+                                    .id("\(spec.id)#\(formEpoch)")
+                                if idx < specs.count - 1 { AppDivider() }
+                            }
                         }
                     }
-                } header: {
-                    NativeCollapsibleHeader(
-                        title: "\(section.rawValue) (\(on)/\(specs.count))",
-                        collapsed: collapsed)
                 }
             }
         }
     }
 
-    private func reportSection(_ report: TweakImportReport) -> some View {
-        Section("Import result") {
-            ForEach(Array(report.logLines.enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+    private func reportCard(_ report: TweakImportReport) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "checkmark.circle", title: "Import result")
+                ForEach(Array(report.logLines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
     }
 
-    private func errorSection(_ message: String) -> some View {
-        Section("Import failed") {
-            NativeNote(message)
+    private func errorCard(_ message: String) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "exclamationmark.triangle.fill",
+                              title: "Import failed",
+                              tint: AppPalette.danger)
+                NativeNote(message)
+            }
         }
     }
 
-    private var logSection: some View {
-        Section("Run log (last 30 lines)") {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(tail.enumerated()), id: \.offset) { _, line in
-                        Text(line)
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
+    private var logCard: some View {
+        AppCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "terminal", title: "Run log")
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(tail.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                 }
+                .frame(height: 220)
             }
-            .frame(height: 260)
+        }
+    }
+
+    private var emptySearchCard: some View {
+        AppCard {
+            AppEmptyState(icon: "magnifyingglass",
+                          title: "No matches",
+                          message: "Nothing in the visible tweaks matches the query.")
         }
     }
 
@@ -189,13 +259,6 @@ struct TweaksView: View {
 
     private func matchesSearch(_ spec: TweakSpec) -> Bool {
         searchMatches(query: searchText, spec.title, spec.detail ?? "", spec.id)
-    }
-
-    private var emptySearchSection: some View {
-        Section {
-            Text("No matches found.")
-                .foregroundStyle(.secondary)
-        }
     }
 
     private func restoreAutosave() {
