@@ -6,58 +6,54 @@ struct ApplyConfirmSheet: View {
     let onApply: () -> Void
     let onCancel: () -> Void
 
-    private var batteryLine: String? {
-        Self.batteryWarningLine()
-    }
+    private var batteryLine: String? { Self.batteryWarningLine() }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: AppPalette.sGap) {
-                    summaryCard
-                    if let line = ApplyPreview.estimatedWorkingSpaceLine() {
-                        workingSpaceCard(line)
+            ZStack {
+                AppBackdrop()
+                ScrollView {
+                    LazyVStack(spacing: AppPalette.sGap) {
+                        summaryCard
+                        if let line = ApplyPreview.estimatedWorkingSpaceLine() {
+                            workingSpaceCard(line)
+                        }
+                        warningsCard
+                        conflictsCard
+                        notesCard
+                        filesCard
                     }
-                    warningsCard
-                    conflictsCard
-                    notesCard
-                    filesCard
+                    .padding(.horizontal, AppPalette.sScreen)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, AppPalette.sScreen)
-                .padding(.vertical, 12)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Apply")
+            .tint(AppPalette.accent)
+            .navigationTitle("Áp dụng")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onCancel() }
+                    Button("Huỷ") { onCancel() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") { onApply() }
-                        .font(.system(size: 15, weight: .semibold))
+                    Button("Áp dụng") { onApply() }
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(AppPalette.accent)
                 }
             }
         }
-        .tint(AppPalette.accent)
     }
-
-    // MARK: - Summary
 
     private var summaryCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "checkmark.seal.fill",
-                              title: "Summary",
-                              tint: AppPalette.accent)
-                metricRow("Tweaks selected", value: "\(preview.selectedCount)")
+                AppCardHeader(icon: "checkmark.seal.fill", title: "Tóm tắt")
+                metricRow("Tinh chỉnh đã chọn", value: "\(preview.selectedCount)")
                 AppDivider()
-                metricRow("Files to write", value: "\(preview.rows.count)")
+                metricRow("Tệp cần ghi", value: "\(preview.rows.count)")
                 AppDivider()
-                metricRow("Total size", value: Self.size(preview.totalBytes))
+                metricRow("Tổng dung lượng", value: Self.size(preview.totalBytes))
                 AppDivider()
-                metricRow("Estimated time",
+                metricRow("Thời gian ước tính",
                           value: ApplyPreview.timeEstimate(total: preview.selectedCount))
             }
         }
@@ -65,26 +61,22 @@ struct ApplyConfirmSheet: View {
 
     private func metricRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(.system(size: 14, weight: .medium))
+            Text(label).font(.subheadline.weight(.medium))
             Spacer()
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.subheadline.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - Working space
-
     private func workingSpaceCard(_ line: String) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "internaldrive", title: "Working space")
+                AppCardHeader(icon: "internaldrive", title: "Dung lượng làm việc")
                 NativeNote(line)
             }
         }
     }
-
-    // MARK: - Warnings
 
     @ViewBuilder
     private var warningsCard: some View {
@@ -93,7 +85,7 @@ struct ApplyConfirmSheet: View {
             AppCard {
                 VStack(alignment: .leading, spacing: 8) {
                     AppCardHeader(icon: "exclamationmark.triangle.fill",
-                                  title: "Warnings",
+                                  title: "Cảnh báo",
                                   tint: AppPalette.warning)
                     ForEach(Array(warnings.enumerated()), id: \.offset) { idx, warning in
                         HStack(alignment: .top, spacing: 8) {
@@ -102,7 +94,7 @@ struct ApplyConfirmSheet: View {
                                 .foregroundStyle(AppPalette.warning)
                                 .padding(.top, 2)
                             Text(warning)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.footnote.weight(.medium))
                                 .foregroundStyle(AppPalette.warning)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -113,15 +105,13 @@ struct ApplyConfirmSheet: View {
         }
     }
 
-    // MARK: - Conflicts
-
     @ViewBuilder
     private var conflictsCard: some View {
         if !preview.conflicts.isEmpty {
             AppCard {
                 VStack(alignment: .leading, spacing: 8) {
                     AppCardHeader(icon: "exclamationmark.triangle.fill",
-                                  title: "Conflicts",
+                                  title: "Xung đột",
                                   tint: AppPalette.danger)
                     ForEach(preview.conflicts) { conflict in
                         HStack(alignment: .top, spacing: 8) {
@@ -130,32 +120,27 @@ struct ApplyConfirmSheet: View {
                                 .foregroundStyle(AppPalette.danger)
                                 .padding(.top, 2)
                             Text(conflict.description)
-                                .font(.system(size: 14))
-                                .foregroundStyle(AppPalette.danger)
+                                .font(.footnote).foregroundStyle(AppPalette.danger)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    NativeSafetyNote("These settings contradict each other. The later tweak wins on the device, so the result may not be what the list suggests.")
+                    NativeSafetyNote("Cấu hình mâu thuẫn. Tweak sau thắng trên thiết bị, kết quả có thể không như danh sách.")
                 }
             }
         }
     }
-
-    // MARK: - Notes
 
     @ViewBuilder
     private var notesCard: some View {
         if !preview.notes.isEmpty {
             AppCard {
                 VStack(alignment: .leading, spacing: 8) {
-                    AppCardHeader(icon: "info.circle", title: "Notes")
+                    AppCardHeader(icon: "info.circle", title: "Ghi chú")
                     ForEach(Array(preview.notes.enumerated()), id: \.offset) { idx, note in
                         if note.hasPrefix("HotLoad") {
                             NativeSafetyNote(note)
                         } else {
-                            Text(note)
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
+                            Text(note).font(.footnote).foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         if idx < preview.notes.count - 1 { AppDivider() }
@@ -165,23 +150,20 @@ struct ApplyConfirmSheet: View {
         }
     }
 
-    // MARK: - Files
-
     @ViewBuilder
     private var filesCard: some View {
         if !preview.rows.isEmpty {
-            AppCard(padding: 14) {
+            AppCard(padding: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     AppCardHeader(icon: "doc.on.doc",
-                                  title: "Files (\(preview.rows.count))")
+                                  title: "Tệp (\(preview.rows.count))")
                     ForEach(Array(preview.rows.enumerated()), id: \.element.id) { idx, row in
                         HStack(alignment: .top) {
                             Text(row.label)
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.primary)
                                 .textSelection(.enabled)
-                                .lineLimit(2)
-                                .truncationMode(.middle)
+                                .lineLimit(2).truncationMode(.middle)
                             Spacer(minLength: 8)
                             Text(Self.size(row.byteCount))
                                 .font(.system(size: 11, design: .monospaced))
@@ -193,8 +175,6 @@ struct ApplyConfirmSheet: View {
             }
         }
     }
-
-    // MARK: - Helpers
 
     private static func size(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
@@ -208,6 +188,6 @@ struct ApplyConfirmSheet: View {
         let charging = device.batteryState == .charging || device.batteryState == .full
         let percent = Int((level * 100).rounded())
         if charging || percent > 20 { return nil }
-        return "⚠ Low battery: \(percent)%. Connect the charger before restoring."
+        return "⚠ Pin yếu: \(percent)%. Cắm sạc trước khi khôi phục."
     }
 }
