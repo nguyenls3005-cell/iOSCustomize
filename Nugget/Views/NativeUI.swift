@@ -1,23 +1,27 @@
 import SwiftUI
 import UIKit
 
-// Theme chung. Card dùng solid fill (bỏ material blur — nguồn lag chính).
+// Flat theme. Cam tươi #FF7A00, đỏ #FF3B30, xanh #34C759. Card không shadow.
 
 enum AppPalette {
-    static let accent     = Color(red: 0.87, green: 0.44, blue: 0.20)
-    static let accentDeep = Color(red: 0.72, green: 0.34, blue: 0.13)
-    static let danger     = Color(red: 0.88, green: 0.31, blue: 0.28)
-    static let success    = Color(red: 0.22, green: 0.68, blue: 0.38)
-    static let warning    = Color(red: 0.90, green: 0.58, blue: 0.12)
+    // Cam tươi — #FF7A00, rõ, không gỉ sét
+    static let accent     = Color(red: 1.00, green: 0.48, blue: 0.00)
+    static let accentDeep = Color(red: 0.92, green: 0.38, blue: 0.00)
+    // Đỏ iOS — #FF3B30
+    static let danger     = Color(red: 1.00, green: 0.23, blue: 0.19)
+    // Xanh iOS — #34C759
+    static let success    = Color(red: 0.20, green: 0.78, blue: 0.35)
+    // Vàng iOS — #FFCC00
+    static let warning    = Color(red: 1.00, green: 0.80, blue: 0.00)
 
-    static let rCard:   CGFloat = 24
-    static let rInner:  CGFloat = 16
-    static let rButton: CGFloat = 16
-    static let rSmall:  CGFloat = 12
+    static let rCard:   CGFloat = 22
+    static let rInner:  CGFloat = 14
+    static let rButton: CGFloat = 14
+    static let rSmall:  CGFloat = 10
 
-    static let sCard:   CGFloat = 16
+    static let sCard:   CGFloat = 14
     static let sGap:    CGFloat = 10
-    static let sScreen: CGFloat = 16
+    static let sScreen: CGFloat = 14
 }
 
 struct NativeNote: View {
@@ -61,7 +65,7 @@ struct NativePrimaryButton: View {
                 Text(title).font(.callout.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 13)
             .foregroundStyle(.white)
             .background(
                 LinearGradient(colors: [AppPalette.accent, AppPalette.accentDeep],
@@ -69,8 +73,6 @@ struct NativePrimaryButton: View {
                     .opacity(disabled ? 0.35 : 1),
                 in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
             )
-            .shadow(color: AppPalette.accentDeep.opacity(disabled ? 0 : 0.18),
-                    radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(running || disabled)
@@ -93,16 +95,14 @@ struct NativeDangerButton: View {
                 Text(title).font(.callout.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 13)
             .foregroundStyle(.white)
             .background(
-                LinearGradient(colors: [AppPalette.danger, AppPalette.danger.opacity(0.82)],
+                LinearGradient(colors: [AppPalette.danger, AppPalette.danger.opacity(0.85)],
                                startPoint: .top, endPoint: .bottom)
                     .opacity(disabled ? 0.35 : 1),
                 in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
             )
-            .shadow(color: AppPalette.danger.opacity(disabled ? 0 : 0.15),
-                    radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
@@ -115,22 +115,23 @@ struct NativeCollapsibleHeader: View {
 
     var body: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.16)) { collapsed.toggle() }
+            collapsed.toggle()
         } label: {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.footnote.weight(.semibold))
+                    .font(.footnote.weight(.bold))
                     .textCase(.uppercase)
-                    .tracking(0.8)
-                    .foregroundStyle(.secondary)
+                    .tracking(0.6)
+                    .foregroundStyle(AppPalette.accent.opacity(0.85))
                 Spacer(minLength: 0)
                 Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(AppPalette.accent.opacity(0.6))
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(.none, value: collapsed)
     }
 }
 
@@ -204,7 +205,8 @@ struct NativeKeyboardDone: ViewModifier {
     }
 }
 
-// Card: solid fill + gradient overlay 3% + 1 shadow nhỏ. Bỏ material.
+// Card: solid fill + border accent 0.06. Bắt mắt hơn nhờ viền màu accent
+// nhưng vẫn KHÔNG shadow — không gây lag.
 struct AppCard<Content: View>: View {
     var padding: CGFloat = AppPalette.sCard
     @ViewBuilder var content: () -> Content
@@ -214,24 +216,13 @@ struct AppCard<Content: View>: View {
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.white.opacity(0.03), .clear],
-                                    startPoint: .top,
-                                    endPoint: .center
-                                )
-                            )
-                    )
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.04), lineWidth: 0.5)
+                    .strokeBorder(AppPalette.accent.opacity(0.08), lineWidth: 0.75)
             )
-            .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
 }
 
@@ -244,10 +235,11 @@ struct AppCardHeader: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(tint)
-            Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            Text(title).font(.subheadline.weight(.bold))
             Spacer(minLength: 6)
             if let trailing { trailing }
         }
@@ -271,19 +263,16 @@ struct AppButton: View {
                     Image(systemName: systemImage)
                         .font(.system(size: 15, weight: .semibold))
                 }
-                Text(title).font(.callout.weight(.semibold))
+                Text(title).font(.callout.weight(.bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 13)
             .foregroundStyle(.white)
             .background(buttonBackground, in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous))
-            .shadow(color: shadowTint.opacity(disabled ? 0 : 0.18), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(disabled || running)
     }
-
-    private var shadowTint: Color { destructive ? AppPalette.danger : AppPalette.accentDeep }
 
     private var buttonBackground: some ShapeStyle {
         let base = destructive ? AppPalette.danger : AppPalette.accent
@@ -305,13 +294,17 @@ struct AppChip: View {
                     .font(.system(size: 10, weight: .bold))
             }
             Text(text)
-                .font(.caption.weight(.semibold))
+                .font(.caption.weight(.bold))
                 .lineLimit(1)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .foregroundStyle(tone.nativeColor)
-        .background(tone.nativeColor.opacity(0.12), in: Capsule(style: .continuous))
+        .background(tone.nativeColor.opacity(0.14), in: Capsule(style: .continuous))
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(tone.nativeColor.opacity(0.22), lineWidth: 0.5)
+        )
     }
 }
 
@@ -328,10 +321,8 @@ struct AppEmptyState: View {
         VStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 34, weight: .light))
-                .foregroundStyle(AppPalette.accent.opacity(0.7))
-            Text(title)
-                .font(.headline)
-                .multilineTextAlignment(.center)
+                .foregroundStyle(AppPalette.accent.opacity(0.8))
+            Text(title).font(.headline).multilineTextAlignment(.center)
             if let message {
                 Text(message)
                     .font(.footnote)
