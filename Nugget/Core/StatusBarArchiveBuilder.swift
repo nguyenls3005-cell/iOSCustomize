@@ -1,10 +1,11 @@
 import Foundation
 
-// MARK: - NSKeyedArchiver classes
+// MARK: - iOS 27 NSKeyedArchiver classes
 //
-// SpringBoard đọc StatusBarOverrides.archive như một NSKeyedArchiver binary plist.
-// Các class dưới đây implement NSCoding để NSKeyedArchiver tạo ra đúng cấu trúc
-// $objects, $top, $archiver mà iOS 27 mong đợi.
+// Dựa trên research của Prognosticate-X, SpringBoard iOS 27 đọc file
+// StatusBarOverrides.archive dưới dạng NSKeyedArchiver binary plist.
+// Các class dưới đây implement NSCoding để NSKeyedArchiver sinh ra đúng
+// cấu trúc $objects, $top, $archiver mà hệ thống mong đợi.
 
 private class SBStatusBarOverridesArchiveRecord: NSObject, NSCoding {
     let statusBarData: STStatusBarData
@@ -15,7 +16,7 @@ private class SBStatusBarOverridesArchiveRecord: NSObject, NSCoding {
         self.suppressedBackgroundActivityIdentifiers = suppressed
     }
 
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
     func encode(with coder: NSCoder) {
         coder.encode(statusBarData, forKey: "statusBarData")
@@ -26,94 +27,55 @@ private class SBStatusBarOverridesArchiveRecord: NSObject, NSCoding {
 private class STStatusBarData: NSObject, NSCoding {
     var cellularEntry: STStatusBarDataCellularEntry?
     var secondaryCellularEntry: STStatusBarDataCellularEntry?
-    var vpnEntry: STStatusBarDataEntry?
 
     override init() {}
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
     func encode(with coder: NSCoder) {
         if let cellularEntry { coder.encode(cellularEntry, forKey: "cellularEntry") }
         if let secondaryCellularEntry { coder.encode(secondaryCellularEntry, forKey: "secondaryCellularEntry") }
-        if let vpnEntry { coder.encode(vpnEntry, forKey: "vpnEntry") }
     }
 }
 
 private class STStatusBarDataCellularEntry: NSObject, NSCoding {
-    var badgeString: String?
-    var callForwardingEnabled: Bool = false
-    var crossfadeString: String?
-    var displayRawValue: Int = 0
-    var displayValue: Int?
-    var enabled: Bool = true
-    var isBootstrapCellular: Bool = false
-    var lowDataModeActive: Bool = false
-    var numberSharingState: Int = 0
-    var rawValue: Int = 0
-    var showsSOSWhenDisabled: Bool = false
-    var sosAvailable: Bool = false
-    var status: Int = 5
     var string: String?
-    var suffixString: String?
+    var crossfadeString: String?
+    var badgeString: String?
+    var displayValue: Int?
     var type: Int?
-    var wifiCallingEnabled: Bool = false
-
-    override init() {}
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func encode(with coder: NSCoder) {
-        coder.encode(badgeString, forKey: "badgeString")
-        coder.encode(callForwardingEnabled, forKey: "callForwardingEnabled")
-        coder.encode(crossfadeString, forKey: "crossfadeString")
-        coder.encode(displayRawValue, forKey: "displayRawValue")
-        if let displayValue { coder.encode(displayValue, forKey: "displayValue") }
-        coder.encode(enabled, forKey: "enabled")
-        coder.encode(isBootstrapCellular, forKey: "isBootstrapCellular")
-        coder.encode(lowDataModeActive, forKey: "lowDataModeActive")
-        coder.encode(numberSharingState, forKey: "numberSharingState")
-        coder.encode(rawValue, forKey: "rawValue")
-        coder.encode(showsSOSWhenDisabled, forKey: "showsSOSWhenDisabled")
-        coder.encode(sosAvailable, forKey: "sosAvailable")
-        coder.encode(status, forKey: "status")
-        coder.encode(string, forKey: "string")
-        coder.encode(suffixString, forKey: "suffixString")
-        if let type { coder.encode(type, forKey: "type") }
-        coder.encode(wifiCallingEnabled, forKey: "wifiCallingEnabled")
-    }
-}
-
-private class STStatusBarDataEntry: NSObject, NSCoding {
+    var status: Int = 5
     var enabled: Bool = true
+    var rawValue: Int = 0
 
     override init() {}
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
     func encode(with coder: NSCoder) {
+        coder.encode(string, forKey: "string")
+        coder.encode(crossfadeString, forKey: "crossfadeString")
+        coder.encode(badgeString, forKey: "badgeString")
+        if let displayValue { coder.encode(displayValue, forKey: "displayValue") }
+        if let type { coder.encode(type, forKey: "type") }
+        coder.encode(status, forKey: "status")
         coder.encode(enabled, forKey: "enabled")
+        coder.encode(rawValue, forKey: "rawValue")
     }
 }
 
 // MARK: - Builder
 
 enum StatusBarArchiveBuilder {
-    /// Tạo archive từ cấu hình StatusBarSelection hiện tại.
-    /// Trả về Data để ghi vào `/var/mobile/Library/SpringBoard/StatusBarOverrides.archive`.
+    /// Tạo archive từ StatusBarSelection hiện tại.
     static func build(from selection: StatusBarSelection) throws -> Data {
         let record = SBStatusBarOverridesArchiveRecord(
             statusBarData: buildStatusBarData(from: selection),
             suppressed: NSSet()
         )
 
-        NSKeyedArchiver.setClassName("_SBSystemStatusStatusBarOverridesArchiveRecord",
-                                     for: SBStatusBarOverridesArchiveRecord.self)
-        NSKeyedArchiver.setClassName("STStatusBarData",
-                                     for: STStatusBarData.self)
-        NSKeyedArchiver.setClassName("STStatusBarDataCellularEntry",
-                                     for: STStatusBarDataCellularEntry.self)
-        NSKeyedArchiver.setClassName("STStatusBarDataEntry",
-                                     for: STStatusBarDataEntry.self)
+        // Mapping Swift class -> ObjC class để SpringBoard decode được
+        NSKeyedArchiver.setClassName("_SBSystemStatusStatusBarOverridesArchiveRecord", for: SBStatusBarOverridesArchiveRecord.self)
+        NSKeyedArchiver.setClassName("STStatusBarData", for: STStatusBarData.self)
+        NSKeyedArchiver.setClassName("STStatusBarDataCellularEntry", for: STStatusBarDataCellularEntry.self)
 
         let archiver = NSKeyedArchiver(requiringSecureCoding: false)
         archiver.encode(record, forKey: "root")
@@ -121,16 +83,15 @@ enum StatusBarArchiveBuilder {
         return archiver.encodedData
     }
 
-    /// Archive rỗng dùng cho reset — SpringBoard sẽ quay về carrier gốc.
+    /// Archive rỗng cho reset (xoá carrier).
     static func buildReset() throws -> Data {
         let record = SBStatusBarOverridesArchiveRecord(
             statusBarData: STStatusBarData(),
             suppressed: NSSet()
         )
-        NSKeyedArchiver.setClassName("_SBSystemStatusStatusBarOverridesArchiveRecord",
-                                     for: SBStatusBarOverridesArchiveRecord.self)
-        NSKeyedArchiver.setClassName("STStatusBarData",
-                                     for: STStatusBarData.self)
+
+        NSKeyedArchiver.setClassName("_SBSystemStatusStatusBarOverridesArchiveRecord", for: SBStatusBarOverridesArchiveRecord.self)
+        NSKeyedArchiver.setClassName("STStatusBarData", for: STStatusBarData.self)
 
         let archiver = NSKeyedArchiver(requiringSecureCoding: false)
         archiver.encode(record, forKey: "root")
