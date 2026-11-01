@@ -1,5 +1,8 @@
 import SwiftUI
 
+// Row tweak. InstantSwitch vẽ tay (không lag, phản hồi tức thì).
+// Bật = gradient cam Liquid Glass, tắt = systemFill.
+
 struct TweakRow: View, Equatable {
     @ObservedObject private var hotload = HotLoadService.shared
     private var safetyWarning: String? { hotload.currentPolicy.flag(for: spec) }
@@ -122,26 +125,44 @@ struct TweakRow: View, Equatable {
     }
 }
 
-// Switch với gradient cam khi bật — bắt mắt hơn solid màu.
+// Switch với Liquid Glass gradient cam khi bật. Vẽ bằng Capsule + Circle,
+// native Metal compositing, không lag như Toggle hệ thống.
+
 struct InstantSwitch: View {
     let isOn: Bool
 
     var body: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
-            Capsule()
-                .fill(isOn
-                      ? AnyShapeStyle(LinearGradient(colors: [AppPalette.accent,
-                                                              AppPalette.accentDeep],
-                                                     startPoint: .top,
-                                                     endPoint: .bottom))
-                      : AnyShapeStyle(Color(uiColor: .systemFill)))
-                .frame(width: 48, height: 30)
+            Capsule(style: .continuous)
+                .fill(fillStyle)
+                .frame(width: 50, height: 30)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(
+                            isOn ? Color.white.opacity(0.20) : Color.primary.opacity(0.06),
+                            lineWidth: 0.5
+                        )
+                )
             Circle()
                 .fill(.white)
+                .shadow(color: .black.opacity(0.12), radius: 3, y: 1)
                 .padding(2)
                 .frame(width: 30, height: 30)
         }
-        .animation(.easeOut(duration: 0.12), value: isOn)
+        .animation(.easeOut(duration: 0.14), value: isOn)
+    }
+
+    @ViewBuilder
+    private var fillStyle: some ShapeStyle {
+        if isOn {
+            LinearGradient(
+                colors: [AppPalette.accent, AppPalette.accentDeep],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        } else {
+            Color(uiColor: .systemFill)
+        }
     }
 }
 
