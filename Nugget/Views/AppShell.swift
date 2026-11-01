@@ -39,7 +39,7 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
     case presets
     case templates
     case posterBoard
-    case wallpaperDownloads // SỬA Ở ĐÂY NÈ
+    case wallpaperDownloads
     case wallet
     case passcode
     case media
@@ -146,6 +146,7 @@ struct RootView: View {
                 FirstRunView()
             }
         }
+        .tint(AppPalette.accent)
         .environment(\.openDestination, open)
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
@@ -199,7 +200,7 @@ struct RootView: View {
                 Label(AppTab.more.title, systemImage: AppTab.more.systemImage)
             }
         }
-        .tint(.orange)
+        .tint(AppPalette.accent)
     }
 
     @ViewBuilder
@@ -217,7 +218,7 @@ struct RootView: View {
                 path = destination == .home ? [] : [destination]
                 if columnVisibility != .detailOnly { columnVisibility = .detailOnly }
             }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 320)
         } detail: {
             NavigationStack(path: $path) {
                 homePage
@@ -225,7 +226,7 @@ struct RootView: View {
             }
         }
         .navigationSplitViewStyle(.prominentDetail)
-        .tint(.orange)
+        .tint(AppPalette.accent)
     }
 
     private var homePage: some View {
@@ -252,7 +253,7 @@ struct RootView: View {
             case .presets: PresetManagerView(selection: $tweakSelection)
             case .templates: TemplatesView(selection: $templateSelection)
             case .posterBoard: PosterBoardView(selection: $posterBoardSelection)
-            case .wallpaperDownloads: WallpaperDownloadsView(selection: $posterBoardSelection) // NỐI VÀO ĐÂY NÈ
+            case .wallpaperDownloads: WallpaperDownloadsView(selection: $posterBoardSelection)
             case .wallet: WalletView()
             case .passcode: PasscodeThemeView()
             case .media: MediaView()
@@ -287,6 +288,8 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - More (tab)
+
 private struct MoreView: View {
     @ObservedObject private var hotload = HotLoadService.shared
     @ObservedObject private var device = DeviceIdentityMonitor.shared
@@ -299,27 +302,69 @@ private struct MoreView: View {
     ]
 
     var body: some View {
-        List {
-            ForEach(Self.sections, id: \.title) { section in
-                let pages = section.pages.filter {
-                    $0.isAvailable(policy: hotload.currentPolicy, device: device.current)
-                }
-                if !pages.isEmpty {
-                    Section(section.title) {
-                        ForEach(pages) { destination in
-                            NavigationLink(value: destination) {
-                                Label(destination.title, systemImage: destination.systemImage)
+        ScrollView {
+            VStack(spacing: AppPalette.sGap) {
+                ForEach(Self.sections, id: \.title) { section in
+                    let pages = section.pages.filter {
+                        $0.isAvailable(policy: hotload.currentPolicy, device: device.current)
+                    }
+                    if !pages.isEmpty {
+                        AppCard {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(section.title.uppercased())
+                                    .font(.system(size: 11, weight: .bold))
+                                    .tracking(1.2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 4)
+                                    .padding(.bottom, 4)
+                                ForEach(Array(pages.enumerated()), id: \.element) { idx, destination in
+                                    NavigationLink(value: destination) {
+                                        MoreRow(destination: destination)
+                                    }
+                                    .buttonStyle(.plain)
+                                    if idx < pages.count - 1 {
+                                        AppDivider().padding(.leading, 46)
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("More")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
+
+private struct MoreRow: View {
+    let destination: AppDestination
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: destination.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(AppPalette.accent)
+                .frame(width: 32, height: 32)
+                .background(AppPalette.accent.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            Text(destination.title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Sidebar (iPad)
 
 private struct AppDestinationList: View {
     @ObservedObject private var hotload = HotLoadService.shared
@@ -328,23 +373,50 @@ private struct AppDestinationList: View {
     let select: (AppDestination) -> Void
 
     var body: some View {
-        List {
-            ForEach(AppDestination.allCases.filter { destination in
-                destination.showsInSidebar
-                    && destination.isAvailable(policy: hotload.currentPolicy, device: device.current)
-            }) { destination in
-                Button { select(destination) } label: {
-                    Label(destination.title, systemImage: destination.systemImage)
-                        .fontWeight(destination == current ? .semibold : .regular)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
+        ScrollView {
+            VStack(spacing: 4) {
+                ForEach(AppDestination.allCases.filter { destination in
+                    destination.showsInSidebar
+                        && destination.isAvailable(policy: hotload.currentPolicy, device: device.current)
+                }) { destination in
+                    Button {
+                        select(destination)
+                    } label: {
+                        sidebarRow(destination)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(destination == current
-                                   ? Color.orange.opacity(0.15)
-                                   : Color.clear)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
         }
-        .listStyle(.sidebar)
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle("iOSCustomize")
+    }
+
+    private func sidebarRow(_ destination: AppDestination) -> some View {
+        let selected = destination == current
+        return HStack(spacing: 12) {
+            Image(systemName: destination.systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(selected ? AppPalette.accent : Color.secondary)
+                .frame(width: 30, height: 30)
+                .background(
+                    (selected ? AppPalette.accent : Color.secondary)
+                        .opacity(selected ? 0.15 : 0.08),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+            Text(destination.title)
+                .font(.system(size: 14, weight: selected ? .semibold : .medium))
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            AppPalette.accent.opacity(selected ? 0.10 : 0),
+            in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous)
+        )
+        .contentShape(Rectangle())
     }
 }
