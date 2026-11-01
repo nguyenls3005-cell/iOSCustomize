@@ -1,23 +1,15 @@
 import SwiftUI
 import UIKit
 
-// Plain-SwiftUI building blocks for the native screens.
+// Shared building blocks for the native screens.
 //
-// These are deliberately thin.  The screens themselves use `List`/`Form`,
-// `Section`, `NavigationLink`, `Toggle`, `TextField`, `LabeledContent` and the
-// system button styles directly; only the few repeated bits of custom text and
-// the two action buttons live here.  Nothing in this file imitates the desktop
-// build, and every value is a Dynamic Type text style or a semantic system
-// colour so light and dark, and the user's text size, both work.
-//
-// The original `Golden*` design-system port — `GoldenComponents.swift` (the
-// component library) and `GoldenTheme.swift` (the palette, metrics and type
-// scale) — has been deleted as dead code: the native screens never used it, and
-// every value it carried now comes from the platform's own styles and semantic
-// colours. `GoldenTone` is the one survivor: the status-line tone slot the
-// screens still pass around, now resolved through `nativeColor` below.
-// `docs/ui-goldennugget.md` keeps the record of where the ported values came
-// from, for anyone who wants to re-derive them.
+// The page-level components are deliberately plain: a solid card, a flat
+// button, a small chip. No gradients, no materials beyond what a card needs to
+// sit on the grouped background, no animation. The look differs from the old
+// `List(.insetGrouped)` layout because it is a stack of cards, not because it
+// is decorated.
+
+// MARK: - Notes
 
 /// A muted explanatory line: secondary, footnote, wraps rather than truncates.
 struct NativeNote: View {
@@ -45,11 +37,12 @@ struct NativeSafetyNote: View {
     }
 }
 
-/// A full-width prominent action, with an inline spinner while running.
-///
-/// Uses the platform's Liquid Glass prominent button style — the system draws
-/// the metal, the press feedback and the disabled state, so there is no gradient
-/// to keep in step with the OS.
+// MARK: - Legacy primary/danger buttons
+//
+// Kept for every page that already uses them (FirstRunView, ResetPagesSheet,
+// PresetManagerView, ...). The HomeView has moved to `AppButton` below, but
+// nothing here is removed so no other screen breaks.
+
 struct NativePrimaryButton: View {
     let title: String
     var systemImage: String?
@@ -75,7 +68,6 @@ struct NativePrimaryButton: View {
     }
 }
 
-/// A full-width destructive action, in the system's red prominent treatment.
 struct NativeDangerButton: View {
     let title: String
     var systemImage: String?
@@ -97,13 +89,8 @@ struct NativeDangerButton: View {
     }
 }
 
-/// A tappable list-section header that folds the section's rows away.
-///
-/// `Section(isExpanded:)` is the platform's own collapsible section, but in the
-/// tweaks/daemons `List`s it drew no visible affordance, so the fold was
-/// unreachable.  This header draws the chevron itself and toggles the same
-/// *collapsed* binding the page already keeps, so the fold state stays where it
-/// was and the caller emits the rows only while the section is open.
+// MARK: - Collapsible header
+
 struct NativeCollapsibleHeader: View {
     let title: String
     @Binding var collapsed: Bool
@@ -125,10 +112,8 @@ struct NativeCollapsibleHeader: View {
     }
 }
 
-/// The app artwork at a chosen size, rounded like the home-screen icon.
-///
-/// Self-contained on purpose: it loads the same `Logo@1x/@2x` bundle files the
-/// ported `GoldenLogo` did, without depending on a component library for it.
+// MARK: - Logo
+
 struct NativeLogo: View {
     var size: CGFloat = 72
 
@@ -139,7 +124,7 @@ struct NativeLogo: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
                     .fill(.thinMaterial)
                     .overlay(
                         Image(systemName: "shippingbox.fill")
@@ -149,11 +134,9 @@ struct NativeLogo: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
     }
 
-    /// `Logo@1x/@2x` are the icon artwork under names no icon key can claim, so
-    /// loading them by path cannot abort the way `UIImage(named: "AppIcon")` can.
     private static let bundledIcon: UIImage? = {
         if let path = Bundle.main.path(forResource: "Logo@2x", ofType: "png"),
            let image = UIImage(contentsOfFile: path) { return image }
@@ -163,19 +146,13 @@ struct NativeLogo: View {
     }()
 }
 
-/// The tone slots the reference has named colors for.
-///
-/// The named colours themselves are gone with the rest of the design tokens
-/// (see `docs/ui-goldennugget.md`): the native screens resolve every tone through
-/// `nativeColor` below, which is what light mode, dark mode and the platform's
-/// own contrast rules expect.
+// MARK: - Tone
+
 enum GoldenTone {
     case primary, secondary, disabled, accent, success, error, warning
 }
 
 extension GoldenTone {
-    /// The same tone slot, in the platform's semantic palette rather than the
-    /// desktop build's named colours.
     var nativeColor: Color {
         switch self {
         case .primary: return .primary
@@ -189,14 +166,12 @@ extension GoldenTone {
     }
 }
 
+// MARK: - Keyboard
+
 extension View {
-    /// Put a "Done" above the keyboard — required for `.numberPad` /
-    /// `.decimalPad` fields, which have no Return key of their own.
     func nativeKeyboardDone() -> some View { modifier(NativeKeyboardDone()) }
 }
 
-/// A "Done" button in a toolbar above the keyboard, resigning through UIKit so
-/// one modifier serves every field.
 struct NativeKeyboardDone: ViewModifier {
     func body(content: Content) -> some View {
         content.toolbar {
@@ -210,5 +185,122 @@ struct NativeKeyboardDone: ViewModifier {
     private static func resignFirstResponder() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                         to: nil, from: nil, for: nil)
+    }
+}
+
+// MARK: - Card surface
+//
+// The one container the redesigned HomeView puts every section in. A rounded
+// rectangle on `secondarySystemGroupedBackground`, a thin border, and no
+// shadow — a card, not a floating tile.
+
+struct AppCard<Content: View>: View {
+    var padding: CGFloat = 16
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        content()
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                Color(uiColor: .secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+            )
+    }
+}
+
+/// The card header: a small icon and a section title, in one line. Used on
+/// every card so the page reads as a set of sections, not as a wall of rows.
+struct AppCardHeader: View {
+    let icon: String
+    let title: String
+    var tint: Color = .accentColor
+    var trailing: AnyView? = nil
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+            Spacer()
+            if let trailing {
+                trailing
+            }
+        }
+    }
+}
+
+// MARK: - Button
+//
+// A flat filled button: rounded rectangle, white text on the accent (or red)
+// fill. This is the HomeView's action primitive. It has no ring, no gradient,
+// no shadow — just a colour change and a corner radius.
+
+struct AppButton: View {
+    let title: String
+    var systemImage: String? = nil
+    var running: Bool = false
+    var disabled: Bool = false
+    var destructive: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                if running {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .foregroundStyle(.white)
+            .background(
+                (destructive ? Color.red : Color.accentColor)
+                    .opacity(disabled ? 0.4 : 1),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled || running)
+    }
+}
+
+// MARK: - Chip
+//
+// A small status label: an optional glyph and a short phrase on a tinted
+// capsule. Replaces a whole List row that used to hold one sentence.
+
+struct AppChip: View {
+    let text: String
+    let tone: GoldenTone
+    var systemImage: String? = nil
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .bold))
+            }
+            Text(text)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .foregroundStyle(tone.nativeColor)
+        .background(tone.nativeColor.opacity(0.13), in: Capsule())
     }
 }
