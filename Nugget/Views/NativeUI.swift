@@ -1,10 +1,12 @@
 import SwiftUI
 import UIKit
 
-// Flat theme. Cam tươi #FF7A00, đỏ #FF3B30, xanh #34C759. Card không shadow.
+// Full Liquid Glass theme. Backdrop tĩnh, card dùng .regularMaterial +
+// .compositingGroup() để cache blur, nút dùng .glassProminent native.
+// Đây là combo duy nhất vừa đẹp vừa mượt trên iOS 26.
 
 enum AppPalette {
-    // Cam tươi — #FF7A00, rõ, không gỉ sét
+    // Cam tươi — #FF7A00
     static let accent     = Color(red: 1.00, green: 0.48, blue: 0.00)
     static let accentDeep = Color(red: 0.92, green: 0.38, blue: 0.00)
     // Đỏ iOS — #FF3B30
@@ -14,15 +16,52 @@ enum AppPalette {
     // Vàng iOS — #FFCC00
     static let warning    = Color(red: 1.00, green: 0.80, blue: 0.00)
 
-    static let rCard:   CGFloat = 22
-    static let rInner:  CGFloat = 14
-    static let rButton: CGFloat = 14
+    static let rCard:   CGFloat = 24
+    static let rInner:  CGFloat = 16
     static let rSmall:  CGFloat = 10
 
-    static let sCard:   CGFloat = 14
-    static let sGap:    CGFloat = 10
-    static let sScreen: CGFloat = 14
+    static let sCard:   CGFloat = 16
+    static let sGap:    CGFloat = 12
+    static let sScreen: CGFloat = 16
 }
+
+// MARK: - Backdrop
+//
+// Mesh gradient TĨNH — không animate. iOS cache kết quả blur của các card
+// đè lên, nên scroll vẫn 60fps. Đổi sang animate là lag ngay.
+
+struct AppBackdrop: View {
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        MeshGradient(width: 3, height: 3, points: [
+            [0.0, 0.0], [0.5, 0.0], [1.0, 0.0],
+            [0.0, 0.5], [0.5, 0.5], [1.0, 0.5],
+            [0.0, 1.0], [0.5, 1.0], [1.0, 1.0]
+        ], colors: colors)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private var colors: [Color] {
+        let base = Color(uiColor: .systemGroupedBackground)
+        if scheme == .dark {
+            return [
+                base, base, base,
+                base, AppPalette.accent.opacity(0.08), base,
+                base, Color(red: 0.35, green: 0.20, blue: 0.55).opacity(0.06), base
+            ]
+        } else {
+            return [
+                base, base, base,
+                base, AppPalette.accent.opacity(0.10), base,
+                base, Color(red: 0.55, green: 0.30, blue: 0.95).opacity(0.05), base
+            ]
+        }
+    }
+}
+
+// MARK: - Notes
 
 struct NativeNote: View {
     let text: String
@@ -46,6 +85,8 @@ struct NativeSafetyNote: View {
     }
 }
 
+// MARK: - Legacy buttons (Liquid Glass)
+
 struct NativePrimaryButton: View {
     let title: String
     var systemImage: String?
@@ -57,7 +98,7 @@ struct NativePrimaryButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if running {
-                    ProgressView().controlSize(.small).tint(.white)
+                    ProgressView().controlSize(.small)
                 } else if let systemImage {
                     Image(systemName: systemImage)
                         .font(.system(size: 15, weight: .semibold))
@@ -65,16 +106,10 @@ struct NativePrimaryButton: View {
                 Text(title).font(.callout.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .foregroundStyle(.white)
-            .background(
-                LinearGradient(colors: [AppPalette.accent, AppPalette.accentDeep],
-                               startPoint: .top, endPoint: .bottom)
-                    .opacity(disabled ? 0.35 : 1),
-                in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassProminent)
+        .tint(AppPalette.accent)
+        .controlSize(.large)
         .disabled(running || disabled)
     }
 }
@@ -95,19 +130,15 @@ struct NativeDangerButton: View {
                 Text(title).font(.callout.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .foregroundStyle(.white)
-            .background(
-                LinearGradient(colors: [AppPalette.danger, AppPalette.danger.opacity(0.85)],
-                               startPoint: .top, endPoint: .bottom)
-                    .opacity(disabled ? 0.35 : 1),
-                in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
-            )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.glassProminent)
+        .tint(AppPalette.danger)
+        .controlSize(.large)
         .disabled(disabled)
     }
 }
+
+// MARK: - Collapsible header
 
 struct NativeCollapsibleHeader: View {
     let title: String
@@ -117,16 +148,16 @@ struct NativeCollapsibleHeader: View {
         Button {
             collapsed.toggle()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Text(title)
                     .font(.footnote.weight(.bold))
                     .textCase(.uppercase)
                     .tracking(0.6)
-                    .foregroundStyle(AppPalette.accent.opacity(0.85))
+                    .foregroundStyle(AppPalette.accent)
                 Spacer(minLength: 0)
                 Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                     .font(.caption2.weight(.bold))
-                    .foregroundStyle(AppPalette.accent.opacity(0.6))
+                    .foregroundStyle(AppPalette.accent.opacity(0.7))
             }
             .contentShape(Rectangle())
         }
@@ -134,6 +165,8 @@ struct NativeCollapsibleHeader: View {
         .animation(.none, value: collapsed)
     }
 }
+
+// MARK: - Logo
 
 struct NativeLogo: View {
     var size: CGFloat = 72
@@ -144,7 +177,7 @@ struct NativeLogo: View {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                    .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                    .fill(.regularMaterial)
                     .overlay(
                         Image(systemName: "shippingbox.fill")
                             .font(.system(size: size * 0.4))
@@ -154,6 +187,10 @@ struct NativeLogo: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .strokeBorder(.white.opacity(0.15), lineWidth: 0.75)
+        )
     }
 
     private static let bundledIcon: UIImage? = {
@@ -164,6 +201,8 @@ struct NativeLogo: View {
         return nil
     }()
 }
+
+// MARK: - Tone
 
 enum GoldenTone {
     case primary, secondary, disabled, accent, success, error, warning
@@ -182,6 +221,8 @@ extension GoldenTone {
         }
     }
 }
+
+// MARK: - Keyboard
 
 extension View {
     func nativeKeyboardDone() -> some View { modifier(NativeKeyboardDone()) }
@@ -205,8 +246,13 @@ struct NativeKeyboardDone: ViewModifier {
     }
 }
 
-// Card: solid fill + border accent 0.06. Bắt mắt hơn nhờ viền màu accent
-// nhưng vẫn KHÔNG shadow — không gây lag.
+// MARK: - Card
+//
+// Bí quyết mượt: .regularMaterial (rẻ hơn ultraThin vì ít lớp) +
+// .compositingGroup() (rasterize card thành 1 layer, không composite
+// từng subview khi scroll). Border accent 0.10 để card không chìm vào
+// nền gradient.
+
 struct AppCard<Content: View>: View {
     var padding: CGFloat = AppPalette.sCard
     @ViewBuilder var content: () -> Content
@@ -216,15 +262,19 @@ struct AppCard<Content: View>: View {
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                Color(uiColor: .secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
+                RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
+                    .fill(.regularMaterial)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
-                    .strokeBorder(AppPalette.accent.opacity(0.08), lineWidth: 0.75)
+                    .strokeBorder(.white.opacity(0.10), lineWidth: 0.75)
             )
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
     }
 }
+
+// MARK: - Header thẻ
 
 struct AppCardHeader: View {
     let icon: String
@@ -233,12 +283,15 @@ struct AppCardHeader: View {
     var trailing: AnyView? = nil
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 24, height: 24)
-                .background(tint, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 30, height: 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(tint.opacity(0.15))
+                )
             Text(title).font(.subheadline.weight(.bold))
             Spacer(minLength: 6)
             if let trailing { trailing }
@@ -246,41 +299,38 @@ struct AppCardHeader: View {
     }
 }
 
+// MARK: - Button phổ thông
+
 struct AppButton: View {
     let title: String
     var systemImage: String? = nil
     var running: Bool = false
     var disabled: Bool = false
     var destructive: Bool = false
+    var prominent: Bool = true
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if running {
-                    ProgressView().controlSize(.small).tint(.white)
+                    ProgressView().controlSize(.small)
                 } else if let systemImage {
                     Image(systemName: systemImage)
                         .font(.system(size: 15, weight: .semibold))
                 }
-                Text(title).font(.callout.weight(.bold))
+                Text(title).font(.callout.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .foregroundStyle(.white)
-            .background(buttonBackground, in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(prominent ? .glassProminent : .glass)
+        .tint(destructive ? AppPalette.danger : AppPalette.accent)
+        .controlSize(.large)
         .disabled(disabled || running)
     }
-
-    private var buttonBackground: some ShapeStyle {
-        let base = destructive ? AppPalette.danger : AppPalette.accent
-        let deep = destructive ? AppPalette.danger.opacity(0.85) : AppPalette.accentDeep
-        return LinearGradient(colors: [base, deep], startPoint: .top, endPoint: .bottom)
-            .opacity(disabled ? 0.35 : 1)
-    }
 }
+
+// MARK: - Chip
 
 struct AppChip: View {
     let text: String
@@ -297,20 +347,66 @@ struct AppChip: View {
                 .font(.caption.weight(.bold))
                 .lineLimit(1)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 11)
+        .padding(.vertical, 6)
         .foregroundStyle(tone.nativeColor)
-        .background(tone.nativeColor.opacity(0.14), in: Capsule(style: .continuous))
+        .background(
+            Capsule(style: .continuous).fill(tone.nativeColor.opacity(0.15))
+        )
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(tone.nativeColor.opacity(0.22), lineWidth: 0.5)
+                .strokeBorder(tone.nativeColor.opacity(0.25), lineWidth: 0.5)
         )
     }
 }
 
+// MARK: - Metric tile (dùng cho stats row)
+//
+// Ô nhỏ hiển thị số liệu. Material nhẹ + compositingGroup để cache.
+
+struct MetricTile: View {
+    let icon: String
+    let label: String
+    let value: String
+    let tone: GoldenTone
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tone.nativeColor)
+            Text(value)
+                .font(.subheadline.weight(.bold).monospacedDigit())
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(label)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: AppPalette.rInner, style: .continuous)
+                .fill(.regularMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AppPalette.rInner, style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 0.5)
+        )
+        .compositingGroup()
+    }
+}
+
+// MARK: - Divider
+
 struct AppDivider: View {
     var body: some View { Divider() }
 }
+
+// MARK: - Empty state
 
 struct AppEmptyState: View {
     let icon: String
