@@ -1,11 +1,6 @@
 import Foundation
 import SwiftUI
 
-/// The run log — an observable store rather than page state.
-///
-/// Unchanged from the original: `append` may be called from any thread, and a
-/// burst schedules exactly one main-queue flush. The window stays at 600 lines
-/// and `firstLineId` keeps row identity stable when the window slides.
 final class RunLog: ObservableObject {
     static let shared = RunLog()
 
@@ -53,13 +48,8 @@ final class RunLog: ObservableObject {
     }
 }
 
-/// The log card — the only view that observes `RunLog`.
-///
-/// **Rewritten for the new design language**: instead of returning a bare
-/// `Section`, it now returns an `AppCard` so it can be dropped straight into
-/// the `VStack` of a redesigned page. The tailing behaviour, the tail marker,
-/// the "Latest" button and the scroll-geometry follow all remain exactly as
-/// they were — the design change is only the container and the chrome.
+/// Card nhật ký — view duy nhất observe RunLog.
+/// Bọc trong AppCard để drop thẳng vào ScrollView + LazyVStack.
 struct RunLogCard: View {
     @ObservedObject private var log = RunLog.shared
     @State private var followsTail = true
@@ -69,21 +59,19 @@ struct RunLogCard: View {
 
     var body: some View {
         if !log.lines.isEmpty {
-            AppCard(padding: 14) {
+            AppCard(padding: 12) {
                 VStack(alignment: .leading, spacing: 8) {
                     AppCardHeader(
                         icon: "terminal",
-                        title: "Log",
+                        title: "Nhật ký",
                         trailing: AnyView(
                             HStack(spacing: 8) {
                                 Text("\(log.lines.count)")
                                     .font(.caption.monospacedDigit())
                                     .foregroundStyle(.secondary)
-                                Button("Clear") {
-                                    log.clear()
-                                }
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(AppPalette.accent)
+                                Button("Xoá") { log.clear() }
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AppPalette.accent)
                             }
                         )
                     )
@@ -116,16 +104,15 @@ struct RunLogCard: View {
                         followsTail = true
                         proxy.scrollTo(Self.tail, anchor: .bottom)
                     } label: {
-                        Label("Latest", systemImage: "arrow.down.to.line.compact")
+                        Label("Mới nhất", systemImage: "arrow.down.to.line.compact")
                             .font(.system(size: 11, weight: .bold))
                             .labelStyle(.titleAndIcon)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.thickMaterial,
-                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
                             .foregroundStyle(AppPalette.accent)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.glass)
+                    .tint(AppPalette.accent)
+                    .controlSize(.mini)
                     .padding(8)
                 }
             }
