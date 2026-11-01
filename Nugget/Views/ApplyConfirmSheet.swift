@@ -1,101 +1,32 @@
 import SwiftUI
 import UIKit
 
-/// The pre-apply confirmation the desktop shows before a device is touched:
-/// the summary, the storage and battery warnings, the conflict list and the
-/// file preview, with the reference's "Apply" / "Cancel" pair.
-///
-/// The reference builds this in `main_window_mixins.py` (`_build_summary` and
-/// its `_storage_warning_line` / `_battery_warning_line` / `_storage_estimate_line`
-/// / `_time_estimate_line` helpers) and reaches the file list through
-/// `details_callback=self._show_apply_preview`; the details are inlined here
-/// because the sheet is small enough to hold them without a second screen.
 struct ApplyConfirmSheet: View {
     let preview: ApplyPreview
     let onApply: () -> Void
     let onCancel: () -> Void
 
-    /// The desktop's battery warning (`main_window_mixins.py:921`): warn below
-    /// 21% unless the device is charging.  Read here rather than passed in,
-    /// because the battery state is a value only this sheet's moment matters for.
     private var batteryLine: String? {
         Self.batteryWarningLine()
     }
 
     var body: some View {
         NavigationStack {
-            List {
-                Section("Summary") {
-                    LabeledContent("Tweaks selected", value: "\(preview.selectedCount)")
-                    LabeledContent("Files to write", value: "\(preview.rows.count)")
-                    LabeledContent("Total size", value: Self.size(preview.totalBytes))
-                    LabeledContent("Estimated time",
-                                   value: ApplyPreview.timeEstimate(total: preview.selectedCount))
-                }
-
-                if let line = ApplyPreview.estimatedWorkingSpaceLine() {
-                    Section("Working space") {
-                        NativeNote(line)
+            ScrollView {
+                VStack(spacing: AppPalette.sGap) {
+                    summaryCard
+                    if let line = ApplyPreview.estimatedWorkingSpaceLine() {
+                        workingSpaceCard(line)
                     }
+                    warningsCard
+                    conflictsCard
+                    notesCard
+                    filesCard
                 }
-
-                // Warnings are gathered so the section is absent when there is
-                // nothing to warn about — the reference prints these lines only
-                // when each is non-nil.
-                let warnings = [ApplyPreview.storageWarningLine(), batteryLine].compactMap { $0 }
-                if !warnings.isEmpty {
-                    Section("Warnings") {
-                        ForEach(Array(warnings.enumerated()), id: \.offset) { _, warning in
-                            NativeSafetyNote(warning)
-                        }
-                    }
-                }
-
-                if !preview.conflicts.isEmpty {
-                    Section("Conflicts") {
-                        ForEach(preview.conflicts) { conflict in
-                            Label(conflict.description, systemImage: "exclamationmark.triangle.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(.red)
-                        }
-                        NativeSafetyNote("These settings contradict each other. The later "
-                            + "tweak wins on the device, so the result may not be what "
-                            + "the list suggests.")
-                    }
-                }
-
-                if !preview.notes.isEmpty {
-                    Section("Notes") {
-                        ForEach(Array(preview.notes.enumerated()), id: \.offset) { _, note in
-                            if note.hasPrefix("HotLoad") {
-                                NativeSafetyNote(note)
-                            } else {
-                                Text(note)
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                    }
-                }
-
-                if !preview.rows.isEmpty {
-                    Section("Files") {
-                        ForEach(preview.rows) { row in
-                            HStack {
-                                Text(row.label)
-                                    .font(.subheadline)
-                                    .textSelection(.enabled)
-                                Spacer(minLength: 8)
-                                Text(Self.size(row.byteCount))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .listStyle(.insetGrouped)
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Apply")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -104,18 +35,171 @@ struct ApplyConfirmSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply") { onApply() }
-                        .font(.headline)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppPalette.accent)
+                }
+            }
+        }
+        .tint(AppPalette.accent)
+    }
+
+    // MARK: - Summary
+
+    private var summaryCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "checkmark.seal.fill",
+                              title: "Summary",
+                              tint: AppPalette.accent)
+                metricRow("Tweaks selected", value: "\(preview.selectedCount)")
+                AppDivider()
+                metricRow("Files to write", value: "\(preview.rows.count)")
+                AppDivider()
+                metricRow("Total size", value: Self.size(preview.totalBytes))
+                AppDivider()
+                metricRow("Estimated time",
+                          value: ApplyPreview.timeEstimate(total: preview.selectedCount))
+            }
+        }
+    }
+
+    private func metricRow(_ label: String, value: String) -> some View {
+        HStack {
+            Text(label).font(.system(size: 14, weight: .medium))
+            Spacer()
+            Text(value)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Working space
+
+    private func workingSpaceCard(_ line: String) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "internaldrive", title: "Working space")
+                NativeNote(line)
+            }
+        }
+    }
+
+    // MARK: - Warnings
+
+    @ViewBuilder
+    private var warningsCard: some View {
+        let warnings = [ApplyPreview.storageWarningLine(), batteryLine].compactMap { $0 }
+        if !warnings.isEmpty {
+            AppCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    AppCardHeader(icon: "exclamationmark.triangle.fill",
+                                  title: "Warnings",
+                                  tint: AppPalette.warning)
+                    ForEach(Array(warnings.enumerated()), id: \.offset) { idx, warning in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(AppPalette.warning)
+                                .padding(.top, 2)
+                            Text(warning)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(AppPalette.warning)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if idx < warnings.count - 1 { AppDivider() }
+                    }
                 }
             }
         }
     }
 
+    // MARK: - Conflicts
+
+    @ViewBuilder
+    private var conflictsCard: some View {
+        if !preview.conflicts.isEmpty {
+            AppCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    AppCardHeader(icon: "exclamationmark.triangle.fill",
+                                  title: "Conflicts",
+                                  tint: AppPalette.danger)
+                    ForEach(preview.conflicts) { conflict in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(AppPalette.danger)
+                                .padding(.top, 2)
+                            Text(conflict.description)
+                                .font(.system(size: 14))
+                                .foregroundStyle(AppPalette.danger)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    NativeSafetyNote("These settings contradict each other. The later tweak wins on the device, so the result may not be what the list suggests.")
+                }
+            }
+        }
+    }
+
+    // MARK: - Notes
+
+    @ViewBuilder
+    private var notesCard: some View {
+        if !preview.notes.isEmpty {
+            AppCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    AppCardHeader(icon: "info.circle", title: "Notes")
+                    ForEach(Array(preview.notes.enumerated()), id: \.offset) { idx, note in
+                        if note.hasPrefix("HotLoad") {
+                            NativeSafetyNote(note)
+                        } else {
+                            Text(note)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if idx < preview.notes.count - 1 { AppDivider() }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Files
+
+    @ViewBuilder
+    private var filesCard: some View {
+        if !preview.rows.isEmpty {
+            AppCard(padding: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    AppCardHeader(icon: "doc.on.doc",
+                                  title: "Files (\(preview.rows.count))")
+                    ForEach(Array(preview.rows.enumerated()), id: \.element.id) { idx, row in
+                        HStack(alignment: .top) {
+                            Text(row.label)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.primary)
+                                .textSelection(.enabled)
+                                .lineLimit(2)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 8)
+                            Text(Self.size(row.byteCount))
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        if idx < preview.rows.count - 1 { AppDivider() }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
     private static func size(_ bytes: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
-    /// `_battery_warning_line`: `percent > 20` or charging means no warning;
-    /// an unknown level (`batteryLevel < 0`) means none either.
     private static func batteryWarningLine() -> String? {
         let device = UIDevice.current
         device.isBatteryMonitoringEnabled = true
