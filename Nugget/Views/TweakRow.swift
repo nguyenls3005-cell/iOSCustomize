@@ -1,14 +1,5 @@
 import SwiftUI
 
-/// Một dòng tweak. Đã tối ưu để toggle phản hồi tức thì:
-///
-/// 1. **`Equatable`** — SwiftUI chỉ re-render row khi tweak của chính nó đổi.
-///    Bật 1 tweak không còn làm 100+ row khác diff lại.
-/// 2. **`@State optimisticOn`** — gạt là thấy ngay, không chờ `selection`
-///    cập nhật xong mới đổi hình. Nếu tweak có cảnh báo, alert hiện ra,
-///    Huỷ thì gạt về, Tiếp tục thì commit.
-/// 3. **Callback** thay `@Binding` — row không còn tự mutate selection, nên
-///    SwiftUI không diff toàn bộ cây view khi 1 toggle đổi.
 struct TweakRow: View, Equatable {
     @ObservedObject private var hotload = HotLoadService.shared
     private var safetyWarning: String? { hotload.currentPolicy.flag(for: spec) }
@@ -17,8 +8,6 @@ struct TweakRow: View, Equatable {
     }
 
     let spec: TweakSpec
-    /// Snapshot giá trị hiện tại của tweak này. Dùng cho `==` để biết có cần
-    /// re-render không, và cho alert hiển thị đúng trạng thái.
     private let isOnSnapshot: Bool
     private let displayValue: String
 
@@ -29,43 +18,28 @@ struct TweakRow: View, Equatable {
     @State private var optimisticOn: Bool
     @State private var showWarning = false
 
-    // MARK: - Khởi tạo (giữ tương thích 2 signature cũ)
-
     init(spec: TweakSpec, selection: Binding<TweakSelection>) {
-        self.init(spec: spec,
-                  selection: selection.wrappedValue,
-                  onToggle: { on in selection.wrappedValue.setOn(on, for: spec) },
-                  onTextChange: { selection.wrappedValue.setValue(.string($0), for: spec) },
-                  onValueChange: { selection.wrappedValue.setValue($0, for: spec) })
+        let current = selection.wrappedValue
+        self.spec = spec
+        self.isOnSnapshot = current.isOn(spec)
+        self.displayValue = current.value(for: spec).display
+        self.onToggle = { on in selection.wrappedValue.setOn(on, for: spec) }
+        self.onTextChange = { selection.wrappedValue.setValue(.string($0), for: spec) }
+        self.onValueChange = { selection.wrappedValue.setValue($0, for: spec) }
+        self._optimisticOn = State(initialValue: current.isOn(spec))
     }
 
     init(spec: TweakSpec, selection: Binding<TweakSelection>,
          isOn: @escaping () -> Bool, setOn: @escaping (Bool) -> Void) {
-        self.init(spec: spec,
-                  selection: selection.wrappedValue,
-                  isOnOverride: isOn,
-                  onToggle: setOn,
-                  onTextChange: { selection.wrappedValue.setValue(.string($0), for: spec) },
-                  onValueChange: { selection.wrappedValue.setValue($0, for: spec) })
-    }
-
-    // Init chính (dùng snapshot + callback)
-    private init(spec: TweakSpec,
-                 selection: TweakSelection,
-                 isOnOverride: (() -> Bool)? = nil,
-                 onToggle: @escaping (Bool) -> Void,
-                 onTextChange: @escaping (String) -> Void,
-                 onValueChange: @escaping (TweakValue) -> Void) {
+        let current = selection.wrappedValue
         self.spec = spec
-        self.isOnSnapshot = (isOnOverride ?? { selection.isOn(spec) })()
-        self.displayValue = selection.value(for: spec).display
-        self.onToggle = onToggle
-        self.onTextChange = onTextChange
-        self.onValueChange = onValueChange
-        self._optimisticOn = State(initialValue: (isOnOverride ?? { selection.isOn(spec) })())
+        self.isOnSnapshot = isOn()
+        self.displayValue = current.value(for: spec).display
+        self.onToggle = setOn
+        self.onTextChange = { selection.wrappedValue.setValue(.string($0), for: spec) }
+        self.onValueChange = { selection.wrappedValue.setValue($0, for: spec) }
+        self._optimisticOn = State(initialValue: isOn())
     }
-
-    // MARK: - Body
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -75,7 +49,6 @@ struct TweakRow: View, Equatable {
                     get: { optimisticOn },
                     set: { newValue in
                         if newValue && !warningText.isEmpty {
-                            // hiện gạt ngay, hỏi sau
                             optimisticOn = true
                             showWarning = true
                         } else {
@@ -127,8 +100,6 @@ struct TweakRow: View, Equatable {
         }
     }
 
-    // MARK: - Diffing
-
     static func == (lhs: TweakRow, rhs: TweakRow) -> Bool {
         lhs.spec.id == rhs.spec.id
             && lhs.isOnSnapshot == rhs.isOnSnapshot
@@ -136,7 +107,6 @@ struct TweakRow: View, Equatable {
     }
 }
 
-/// Numeric editor giữ draft riêng — không cần Binding, chỉ cần display + callback.
 struct TweakNumberField: View {
     let spec: TweakSpec
     let display: String
