@@ -1,75 +1,52 @@
 import SwiftUI
 
-/// The Daemons half of the Tweaks page — a port of GoldenNugget's
-/// `IOSDaemonsContent` (`src/gui/ios/daemons.py`).
-///
-/// Everything a group switch does is a `TweakSpec` in the catalog, so Apply,
-/// autosave and preset import work on it unchanged. This view is only the
-/// reference's arrangement: a master switch, the one-tap Recommended set, the
-/// two switch groups, and the ScreenTime nullify underneath.  It is rendered
-/// inside `TweaksView` behind its Tweaks/Daemons switch, and keeps its own
-/// title and search field there — the two halves search different things.
-///
-/// The six groups upstream marks interface-visible but gives no switch
-/// (`showsSwitch == false`) are deliberately not rendered — they belong to the
-/// Recommended set, and the reference offers no way to toggle them alone.
 struct DaemonsView: View {
     @ObservedObject private var hotload = HotLoadService.shared
     @Binding var selection: TweakSelection
 
-    /// Matches desktop's install-level acknowledgement, outside autosave/presets.
-    /// No selection is changed until both warnings have been accepted.
     @AppStorage("daemon_bootloop_warned") private var daemonWarningsAccepted = false
     @State private var pendingEnable: DaemonEnableAction?
-    /// The model line at the top of the page, from the shared monitor — see
-    /// `TweaksView`'s note.  A computed read, so this page cannot hold a copy that
-    /// disagrees with the one the Tweaks page filtered its rows by.
     @ObservedObject private var deviceMonitor = DeviceIdentityMonitor.shared
     private var identity: DeviceIdentity { deviceMonitor.current }
 
-    /// Same disclosure behaviour as the Tweaks page: a section the user has not
-    /// touched is open when something in it is on. Forty groups of switches is a
-    /// page you cannot scan, but a section that is folded hides the one group you
-    /// came to change, so the fold follows the state rather than a blanket
-    /// default.
     @State private var collapsedSections: Set<DaemonSection> = []
     @State private var foldedByHand: Set<DaemonSection> = []
-    /// The search field's text, filtered through `visibleGroups`.
     @State private var searchText = ""
 
     var body: some View {
-        List {
-            headerSection
-            coverageSection
-            if searchActive && !DaemonGroups.all.contains(where: { $0.showsSwitch && matchesSearch($0) }) {
-                emptySearchSection
-            }
-            ForEach(DaemonSection.allCases) { section in
-                let groups = visibleGroups(in: section)
-                if !groups.isEmpty {
-                    // Same disclosure behaviour as the tweaks page: an explicit
-                    // chevron in the header, rows built only while open.
-                    let collapsed = collapsedBinding(for: section, groups: groups)
-                    Section {
-                        if !collapsed.wrappedValue {
-                            ForEach(groups, id: \.name) { group in
-                                groupRow(group)
+        ScrollView {
+            VStack(spacing: AppPalette.sGap) {
+                masterCard
+                coverageCard
+                if searchActive && !DaemonGroups.all.contains(where: { $0.showsSwitch && matchesSearch($0) }) {
+                    emptySearchCard
+                }
+                ForEach(DaemonSection.allCases) { section in
+                    let groups = visibleGroups(in: section)
+                    if !groups.isEmpty {
+                        let collapsed = collapsedBinding(for: section, groups: groups)
+                        AppCard(padding: 14) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                NativeCollapsibleHeader(
+                                    title: "\(section.rawValue) (\(onCount(in: groups))/\(groups.count))",
+                                    collapsed: collapsed)
+                                if !collapsed.wrappedValue {
+                                    ForEach(Array(groups.enumerated()), id: \.element.name) { idx, group in
+                                        groupRow(group)
+                                        if idx < groups.count - 1 { AppDivider() }
+                                    }
+                                }
                             }
                         }
-                    } header: {
-                        NativeCollapsibleHeader(
-                            title: "\(section.rawValue) (\(onCount(in: groups))/\(groups.count))",
-                            collapsed: collapsed)
                     }
                 }
+                screenTimeCard
             }
-            screenTimeSection
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Daemons")
-        // The reference gives the daemons list the same search widget as the
-        // tweaks list (`gui/ios/daemons.py`, `ListSearch`): every word of the
-        // query must appear in the group's title, its name or one of its labels.
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
                     prompt: "Search daemons")
@@ -82,26 +59,22 @@ struct DaemonsView: View {
             }
         }
         .task {
-            // Fresh rather than cached: the model line at the top of this page is
-            // what the user came to read, and a page opened after a device swap
-            // should not need a restart to say so.
             await deviceMonitor.refresh()
         }
     }
 
     // MARK: - Sections
 
-    /// The device line and the count, in the Tweaks page's shape. The counts
-    /// differ deliberately: this page has no "applicable" filter, so a group that
-    /// is missing is missing for good, not because the device cannot run it.
-    private var coverageSection: some View {
-        Section {
-            Text(identity.describe)
-                .font(.headline)
-            NativeNote("\(onCount(in: DaemonGroups.all.filter { $0.showsSwitch })) "
-                + "of \(DaemonGroups.all.filter { $0.showsSwitch }.count) daemon group(s) on. "
-                + "The groups upstream marks interface-visible but gives no switch are in the "
-                + "Recommended set only.")
+    private var coverageCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(identity.describe)
+                    .font(.system(size: 15, weight: .semibold))
+                NativeNote("\(onCount(in: DaemonGroups.all.filter { $0.showsSwitch })) "
+                    + "of \(DaemonGroups.all.filter { $0.showsSwitch }.count) daemon group(s) on. "
+                    + "The groups upstream marks interface-visible but gives no switch are in the "
+                    + "Recommended set only.")
+            }
         }
     }
 
@@ -122,18 +95,22 @@ struct DaemonsView: View {
             })
     }
 
-    private var headerSection: some View {
-        Section {
-            masterRow
-            if !hotload.currentPolicy.forcedDaemons.isEmpty {
-                NativeSafetyNote("HotLoad forces \(hotload.currentPolicy.forcedDaemons.count) daemon label(s) disabled, even when daemon modifications are off.")
+    private var masterCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 12) {
+                AppCardHeader(icon: "gearshape.2.fill", title: "Daemon modifications")
+                masterRow
+                AppDivider()
+                recommendedRow
+                if !hotload.currentPolicy.forcedDaemons.isEmpty {
+                    NativeSafetyNote("HotLoad forces \(hotload.currentPolicy.forcedDaemons.count) daemon label(s) disabled, even when daemon modifications are off.")
+                }
+                NativeNote("Writes "
+                    + "/var/db/com.apple.xpc.launchd/disabled.plist. Disabling a "
+                    + "daemon stops its service. Only the "
+                    + "\(DaemonGroups.allowedKeys.count) labels shown here can "
+                    + "ever reach the file.")
             }
-            recommendedRow
-            NativeNote("Writes "
-                + "/var/db/com.apple.xpc.launchd/disabled.plist. Disabling a "
-                + "daemon stops its service. Only the "
-                + "\(DaemonGroups.allowedKeys.count) labels shown here can "
-                + "ever reach the file.")
         }
     }
 
@@ -147,6 +124,7 @@ struct DaemonsView: View {
                 }
                 selection.daemonModificationsEnabled = false
             }))
+        .tint(AppPalette.accent)
     }
 
     private var recommendedRow: some View {
@@ -157,28 +135,49 @@ struct DaemonsView: View {
                 requestEnable(.recommended)
             }
         } label: {
-            Label("Recommended (analytics, tracking & logging)",
-                  systemImage: "wand.and.stars")
+            HStack(spacing: 10) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppPalette.accent)
+                Text("Recommended (analytics, tracking & logging)")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var screenTimeCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "hourglass", title: "Other", tint: AppPalette.warning)
+                let spec = TweakCatalog.screenTimeSpec
+                TweakRow(spec: spec, selection: $selection,
+                         isOn: { isOn(spec) }, setOn: { requestSetOn($0, for: spec) })
+                NativeNote("Writes a 0-byte file over "
+                    + "\(DaemonGroups.screenTime.path). Upstream models this as "
+                    + "a NullifyFileTweak: it removes a plist rather than "
+                    + "writing one.")
+            }
         }
     }
 
-    private var screenTimeSection: some View {
-        Section("Other") {
-            let spec = TweakCatalog.screenTimeSpec
-            TweakRow(spec: spec, selection: $selection,
-                     isOn: { isOn(spec) }, setOn: { requestSetOn($0, for: spec) })
-            NativeNote("Writes a 0-byte file over "
-                + "\(DaemonGroups.screenTime.path). Upstream models this as "
-                + "a NullifyFileTweak: it removes a plist rather than "
-                + "writing one.")
+    private var emptySearchCard: some View {
+        AppCard {
+            AppEmptyState(icon: "magnifyingglass",
+                          title: "No matches",
+                          message: "No daemon group matches the query.")
         }
     }
 
     // MARK: - Rows
 
-    /// The Tweaks page's row, given the daemon meaning of "on": a group is on
-    /// when every launchd label in it is written as disabled, which needs the
-    /// value dict written alongside the flag, not just the flag.
     @ViewBuilder
     private func groupRow(_ group: DaemonGroup) -> some View {
         if let spec = spec(group) {
@@ -192,8 +191,6 @@ struct DaemonsView: View {
                     + (forced.first.flatMap { hotload.currentPolicy.forcedDaemons[$0] } ?? ""))
             }
         } else {
-            // A group with no spec would be a switch that does nothing. Say so
-            // rather than rendering a row that cannot be tapped.
             Text(group.title)
                 .foregroundStyle(.tertiary)
         }
@@ -205,25 +202,12 @@ struct DaemonsView: View {
         DaemonGroups.all.filter { $0.section == section && $0.showsSwitch && matchesSearch($0) }
     }
 
-    /// Whether the search field holds a non-empty query.
     private var searchActive: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// The reference stores a card's `searchText` as the title, the daemon name
-    /// and its labels joined (`gui/ios/daemons.py`), and matches the query's
-    /// words against all of them.
     private func matchesSearch(_ group: DaemonGroup) -> Bool {
         searchMatches(query: searchText, group.title, group.name, group.labels.joined(separator: " "))
-    }
-
-    /// The reference's `IOSSearchEmpty`: shown only while a query is live and
-    /// no switchable group survived it.
-    private var emptySearchSection: some View {
-        Section {
-            Text("No matches found.")
-                .foregroundStyle(.secondary)
-        }
     }
 
     private func spec(_ group: DaemonGroup) -> TweakSpec? {
@@ -240,8 +224,6 @@ struct DaemonsView: View {
         DaemonGroups.recommended.allSatisfy(isOn)
     }
 
-    /// Gate every interactive enable path, including Recommended and Screen Time.
-    /// Turning something off never requires acknowledgement.
     private func requestSetOn(_ on: Bool, for spec: TweakSpec) {
         if on {
             requestEnable(.tweak(spec.id))
@@ -268,18 +250,11 @@ struct DaemonsView: View {
         }
     }
 
-    /// One group on means "disable every launchd label in it", which is what
-    /// upstream's `set_multiple_values(sorted(keys), value=True)` does.
     private func setGroup(_ group: DaemonGroup, on: Bool) {
         guard let spec = spec(group) else { return }
         setOn(on, for: spec)
     }
 
-    /// A daemon group is "on" when its labels must be *disabled*, so the switch
-    /// writes `true` for every label in it — the launchd plist reads
-    /// `label: true` as "do not start this". The registry defaults in the spec
-    /// are all-false, so setting only the on-flag would write a file that
-    /// disables nothing.
     private func setOn(_ on: Bool, for spec: TweakSpec) {
         if on, let group = DaemonGroups.all.first(where: { "Daemon.\($0.name)" == spec.id }) {
             selection.restore(enabled: true, value: nil, multiValues: trueValues(for: group),
@@ -299,8 +274,8 @@ struct DaemonsView: View {
     }
 }
 
-/// The pending intent stays separate from the selection so Stop or a swipe to
-/// dismiss leaves both the toggles and the persisted acknowledgement unchanged.
+// MARK: - Warning sheet
+
 private enum DaemonEnableAction: Identifiable {
     case master
     case recommended
@@ -315,8 +290,6 @@ private enum DaemonEnableAction: Identifiable {
     }
 }
 
-/// Desktop's two consecutive confirmations, presented in one native sheet to
-/// avoid presenting a second alert while the first is still being dismissed.
 private struct DaemonEnableWarningSheet: View {
     let confirm: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -326,20 +299,24 @@ private struct DaemonEnableWarningSheet: View {
         VStack(spacing: 20) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppPalette.warning)
                 .accessibilityHidden(true)
             Text("Before you continue")
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
             Text(backupWarning
                  ? "Make a full device backup before applying these changes."
                  : "Stopping system services can leave your device stuck restarting or unable to start. Recovery may require restoring the device.")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("Continue Anyway") {
+                .padding(.horizontal, 8)
+            AppButton(title: "Continue Anyway",
+                      destructive: true) {
                 if backupWarning { confirm() } else { backupWarning = true }
             }
-            .buttonStyle(.borderedProminent)
             Button("Stop", role: .cancel) { dismiss() }
+                .font(.system(size: 15, weight: .medium))
         }
         .padding(24)
         .presentationDetents([.medium, .large])
