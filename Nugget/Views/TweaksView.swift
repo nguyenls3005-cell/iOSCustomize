@@ -21,11 +21,9 @@ struct TweaksView: View {
     @State private var foldedByHand: Set<TweakSection> = []
     @State private var searchText = ""
 
-    // Debounce autosave bằng Timer, không tạo Task mỗi lần toggle.
-    @State private var autosaveTimer: Task<Void, Never>?
+    @State private var autosaveTask: Task<Void, Never>?
 
     var body: some View {
-        // Tính visibleSpecs một lần / body render — tránh filter lặp lại.
         let specs = visibleSpecs
         ScrollView {
             LazyVStack(spacing: AppPalette.sGap) {
@@ -189,8 +187,8 @@ struct TweaksView: View {
                         if !collapsed.wrappedValue {
                             ForEach(Array(sectionSpecs.enumerated()), id: \.element.id) { idx, spec in
                                 TweakRow(spec: spec, selection: $selection)
-                                    .id("\(spec.id)#\(formEpoch)")
                                     .equatable()
+                                    .id("\(spec.id)#\(formEpoch)")
                                 if idx < sectionSpecs.count - 1 { AppDivider() }
                             }
                         }
@@ -285,16 +283,16 @@ struct TweaksView: View {
         return "Lựa chọn được lưu vào \(path) sau mỗi thay đổi (\(state))."
     }
 
-    /// Debounce nhẹ: giữ 1 Task, huỷ Task cũ nếu còn pending. Không tạo Task
-    /// mới trên mỗi toggle — đây là thứ làm toggle không bị "khựng".
     private func scheduleAutosave() {
-        autosaveTimer?.cancel()
+        autosaveTask?.cancel()
         let snapshot = selection
         let device = identity
-        autosaveTimer = Task.detached(priority: .background) {
-            try? await Task.sleep(for: .milliseconds(600))
+        autosaveTask = Task {
+            try? await Task.sleep(for: GoldenNuggetAutosave.debounce)
             guard !Task.isCancelled else { return }
-            _ = GoldenNuggetAutosave.save(snapshot, identity: device)
+            _ = await Task.detached(priority: .utility) {
+                GoldenNuggetAutosave.save(snapshot, identity: device)
+            }.value
         }
     }
 
