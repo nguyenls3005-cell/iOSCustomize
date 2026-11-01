@@ -1,32 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// The Templates page: imported `.batter` files and the options they expose.
-///
-/// A port of the reference's **Templates** tab (`posterboard.py`'s
-/// `_create_templates_tab`), which lives inside its PosterBoard page.  It is a
-/// page of its own here, and the reason is semantic rather than cosmetic: a
-/// template is not a wallpaper.  Only templates whose `domain` is PosterBoard's
-/// ride along with the wallpapers; the rest restore into any other app's
-/// container, and putting those under a page called PosterBoard would say
-/// something false about them.
-///
-/// The page edits `TemplateSelection`, which `RootView` owns — the **Apply** on
-/// the home page delivers it, and a `NavigationSplitView` destroys the detail
-/// view on every sidebar selection, so as page state the options would be gone
-/// by the time the user reached the button.
-///
-/// Three things this page says that the reference's does not, all of them
-/// because this port cannot do what the reference can:
-///
-///   * a `Sparserestore-` template is **refused with its reason** rather than
-///     quietly skipped — see `TemplateFile.requiresSparserestore`;
-///   * a `replace` option's chosen file does **not** survive a relaunch, and
-///     the row says so, because the reference keeps the whole template in
-///     memory and never has to re-ask;
-///   * a template's `min_version` / `max_version` are re-checked against the
-///     device on every appearance, because the device can change under a
-///     selection that lives on disk.
 struct TemplatesView: View {
     @Binding var selection: TemplateSelection
 
@@ -36,37 +10,27 @@ struct TemplatesView: View {
     @State private var showImporter = false
     @State private var pickError: String?
 
-    /// The file picker for a `replace` option, and which option asked for it.
-    ///
-    /// One picker for the whole page rather than one per option, because two
-    /// `fileImporter` modifiers on the same view shadow each other on iOS 26 —
-    /// the same reason `PosterBoardView` keeps each picker attached to the
-    /// control that presents it.
     @State private var replaceTarget: (template: Int, option: Int)?
     @State private var showReplaceImporter = false
 
     var body: some View {
-        List {
-            introSection
-            if !selection.templates.isEmpty { templateList }
-            importSection
-            if let status {
-                Section {
-                    Text(status)
-                        .foregroundStyle(statusTone.nativeColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+        ScrollView {
+            VStack(spacing: AppPalette.sGap) {
+                introCard
+                if !selection.templates.isEmpty { templateListCard }
+                importCard
+                if let status { statusCard(status) }
+                if let pickError { errorCard(pickError) }
+                RunLogCard()
             }
-            if let pickError { errorSection(pickError) }
-            RunLogCard()
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Templates")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             identity = await DeviceIdentity.read()
-            // Reloaded with the device version so a template's own version
-            // gates are re-checked: the page is the only place that knows both.
             selection.loadFromDisk(deviceVersion: identity.version)
         }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.data]) { result in
@@ -78,62 +42,104 @@ struct TemplatesView: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Cards
 
-    private var introSection: some View {
-        Section {
-            NativeNote("A `.batter` file is a ZIP holding a `config.json`: it names the domain "
-                + "to restore into and lists what you may change — an image to swap in, a colour, "
-                + "a number, which of three variants to install. Import one, fill in its options "
-                + "here, then press Apply on the home page. Nothing is written to the device until "
-                + "then.")
+    private var introCard: some View {
+        AppCard {
+            NativeNote("A `.batter` file is a ZIP holding a `config.json`: it names the domain to restore into and lists what you may change — an image to swap in, a colour, a number, which of three variants to install. Import one, fill in its options here, then press Apply on the home page. Nothing is written to the device until then.")
         }
     }
 
-    private var importSection: some View {
-        Section {
-            Button {
-                showImporter = true
-            } label: {
-                Label("Import .batter template", systemImage: "plus.circle")
-            }
-            Link(destination: URL(string: "https://github.com/GoldenNugget-Team/GoldenNugget-TemplateBuilder/releases/latest")!) {
-                Label("Create a template with Batter Builder", systemImage: "square.and.pencil")
-            }
-            NavigationLink("Community template switches") { CommunityCatalogView() }
-            if selection.templates.isEmpty {
-                NativeNote("No templates imported yet.")
-            } else {
-                Button(role: .destructive) {
-                    selection.templates.forEach(TemplateImports.remove)
-                    selection.loadFromDisk(deviceVersion: identity.version)
+    private var importCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "square.and.arrow.down", title: "Import")
+                Button {
+                    showImporter = true
                 } label: {
-                    Label("Remove all templates", systemImage: "trash")
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                        Text("Import .batter template")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
-                NativeNote("Each template is copied into this app, so removing one here removes "
-                    + "the copy — the file you imported is untouched.")
+                .buttonStyle(.plain)
+
+                Link(destination: URL(string: "https://github.com/GoldenNugget-Team/GoldenNugget-TemplateBuilder/releases/latest")!) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                        Text("Create a template with Batter Builder")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+
+                NavigationLink("Community template switches") { CommunityCatalogView() }
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppPalette.accent)
+
+                if selection.templates.isEmpty {
+                    NativeNote("No templates imported yet.")
+                } else {
+                    AppDivider()
+                    Button(role: .destructive) {
+                        selection.templates.forEach(TemplateImports.remove)
+                        selection.loadFromDisk(deviceVersion: identity.version)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(AppPalette.danger)
+                            Text("Remove all templates")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(AppPalette.danger)
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    NativeNote("Each template is copied into this app, so removing one here removes the copy — the file you imported is untouched.")
+                }
             }
         }
     }
 
-    private var templateList: some View {
-        Section("Imported (\(selection.templates.count))") {
-            ForEach(Array(selection.templates.enumerated()), id: \.element.id) { pair in
-                templateCard(pair.offset, pair.element)
+    private var templateListCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "slider.horizontal.below.rectangle",
+                              title: "Imported (\(selection.templates.count))")
+                ForEach(Array(selection.templates.enumerated()), id: \.element.id) { pair in
+                    templateRow(pair.offset, pair.element)
+                    if pair.offset < selection.templates.count - 1 { AppDivider() }
+                }
             }
         }
     }
 
-    // MARK: - One template
-
-    private func templateCard(_ index: Int, _ template: TemplateFile) -> some View {
+    private func templateRow(_ index: Int, _ template: TemplateFile) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(template.title).font(.body).lineLimit(2)
+                    Text(template.title)
+                        .font(.system(size: 15, weight: .medium))
+                        .lineLimit(2)
                     Text(template.summary)
                         .font(.caption)
-                        .foregroundStyle(template.requiresSparserestore ? Color.orange : Color.secondary)
+                        .foregroundStyle(template.requiresSparserestore
+                                         ? AppPalette.warning : Color.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .layoutPriority(1)
@@ -142,40 +148,37 @@ struct TemplatesView: View {
                     TemplateImports.remove(template)
                     selection.loadFromDisk(deviceVersion: identity.version)
                 } label: {
-                    Image(systemName: "trash").font(.system(size: 14))
+                    Image(systemName: "trash")
+                        .font(.system(size: 13))
+                        .foregroundStyle(AppPalette.danger)
                 }
                 .buttonStyle(.plain)
             }
 
             if template.requiresSparserestore {
-                NativeSafetyNote("This template cannot be delivered by this app: it asks for "
-                    + "sparserestore, which this app does not implement. Importing it is "
-                    + "harmless — it is simply left out of the apply, and the run log says so "
-                    + "rather than reporting success.")
+                NativeSafetyNote("This template cannot be delivered by this app: it asks for sparserestore, which this app does not implement. Importing it is harmless — it is simply left out of the apply, and the run log says so rather than reporting success.")
             }
 
-            // The preview images the config names.  Horizontal or stacked, per
-            // `preview_layout` — the reference's own switch.
             if !template.previews.isEmpty {
                 previews(template)
                     .frame(height: template.previewLayout == .stacked ? 250 : 180)
             }
             if let banner = template.bannerText {
                 Text(banner)
-                    .font(.footnote)
+                    .font(.system(size: 12))
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(8)
-                    .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                    .background(Color.secondary.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             if let description = template.description {
                 NativeNote(description)
             }
 
-            // The bundle-id text box, the one option that is a field rather than
-            // an object.
             if template.canChangeBundleID {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("App bundle id").font(.subheadline)
+                    Text("App bundle id")
+                        .font(.system(size: 13, weight: .medium))
                     TextField("Bundle id", text: Binding(
                         get: { selection.templates[safe: index]?.bundleID ?? template.bundleID },
                         set: { newValue in
@@ -185,13 +188,14 @@ struct TemplatesView: View {
                         }))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
                     .font(.callout)
-                    NativeNote("The template's files are restored into this bundle's container. "
-                        + "Its own note: this also changes files whose names start the same way.")
+                    NativeNote("The template's files are restored into this bundle's container. Its own note: this also changes files whose names start the same way.")
                 }
             }
 
             ForEach(Array(template.options.enumerated()), id: \.offset) { optionPair in
+                AppDivider()
                 optionRow(templateIndex: index, optionIndex: optionPair.offset,
                           option: optionPair.element)
             }
@@ -203,8 +207,6 @@ struct TemplatesView: View {
         let images = template.previews.sorted { $0.key < $1.key }
         return Group {
             if template.previewLayout == .stacked {
-                // The reference stacks them with `StackAll`, i.e. one on top of
-                // another at the same position.  Reproduced as a ZStack.
                 ZStack {
                     ForEach(Array(images.enumerated()), id: \.offset) { pair in
                         if let image = UIImage(contentsOfFile: pair.element.value.path) {
@@ -242,6 +244,7 @@ struct TemplatesView: View {
                                   systemImage: value.value == nil ? "square.and.arrow.down" : "arrow.triangle.2.circlepath")
                         }
                         .buttonStyle(.bordered)
+                        .tint(AppPalette.accent)
                         if let picked = value.value {
                             Text(picked.lastPathComponent)
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -257,25 +260,22 @@ struct TemplatesView: View {
                     }
                 }
                 if value.required && value.value == nil {
-                    NativeNote("This one is required: the template cannot be applied until a file "
-                        + "is chosen.")
+                    NativeNote("This one is required: the template cannot be applied until a file is chosen.")
                 }
-                NativeNote("Allowed: \(value.allowedFiles). Applies the same file to every path the "
-                    + "template lists.")
-                NativeNote("The chosen file is not kept between launches — re-pick it after "
-                    + "reopening the app. Everything else you set here is.")
+                NativeNote("Allowed: \(value.allowedFiles). Applies the same file to every path the template lists.")
+                NativeNote("The chosen file is not kept between launches — re-pick it after reopening the app. Everything else you set here is.")
 
             case let value as RemoveOption:
                 optionControl(title: value.label) {
                     Toggle("", isOn: Binding(
-                        get: { (current(templateIndex, optionIndex) as? RemoveOption)?.value
-                            ?? false },
+                        get: { (current(templateIndex, optionIndex) as? RemoveOption)?.value ?? false },
                         set: { newValue in
                             mutate(templateIndex, optionIndex, as: RemoveOption.self) { opt in
                                 opt.value = newValue
                             }
                         }))
                     .labelsHidden()
+                    .tint(AppPalette.accent)
                 }
                 if let identifier = value.identifier {
                     NativeNote("Removes the element \"\(identifier)\""
@@ -294,10 +294,6 @@ struct TemplatesView: View {
             case let value as PickerOption:
                 optionControl(title: value.label) {
                     if value.allowMultipleSelection {
-                        // A multi-selection picker is a set of toggles; the
-                        // reference's `MultiComboBox` is one control, but on a
-                        // phone-width column a list of switches is the readable
-                        // equivalent and does the same thing.
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(Array(value.choices.enumerated()), id: \.offset) { pair in
                                 Toggle(pair.element.label, isOn: Binding(
@@ -305,11 +301,12 @@ struct TemplatesView: View {
                                         .selection.contains(pair.offset) ?? false },
                                     set: { on in
                                         mutate(templateIndex, optionIndex, as: PickerOption.self) { opt in
-                                                if on { opt.selection.insert(pair.offset) }
-                                                else { opt.selection.remove(pair.offset) }
-                                            }
+                                            if on { opt.selection.insert(pair.offset) }
+                                            else { opt.selection.remove(pair.offset) }
+                                        }
                                     }))
                                 .font(.callout)
+                                .tint(AppPalette.accent)
                             }
                         }
                     } else {
@@ -351,6 +348,7 @@ struct TemplatesView: View {
                         }
                         }))
                     .labelsHidden()
+                    .tint(AppPalette.accent)
 
                 case .textbox:
                     TextField("Value", text: Binding(
@@ -358,14 +356,14 @@ struct TemplatesView: View {
                         set: { newValue in
                             mutate(templateIndex, optionIndex, as: SetOption.self) { opt in
                             opt.text = newValue
-                            let parts = newValue.split(separator: " ")
-                                .map { Double($0) ?? 0 }
+                            let parts = newValue.split(separator: " ").map { Double($0) ?? 0 }
                             if !parts.isEmpty { opt.value = parts }
                         }
                         }))
                     .font(.callout)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .textFieldStyle(.roundedBorder)
 
                 case .slider:
                     ForEach(Array(value.value.indices), id: \.self) { component in
@@ -374,8 +372,7 @@ struct TemplatesView: View {
                                 $0.count > 1 ? $0[component] : $0[0] } ?? 0
                             let upper = value.maxValue.map {
                                 $0.count > 1 ? $0[component] : $0[0] } ?? 1
-                            let stepValue = value.step.count > 1 ? value.step[component]
-                                : value.step[0]
+                            let stepValue = value.step.count > 1 ? value.step[component] : value.step[0]
                             HStack {
                                 Text(lower.description).font(.caption2).foregroundStyle(.secondary)
                                 Slider(
@@ -390,6 +387,7 @@ struct TemplatesView: View {
                                         }),
                                     in: value.scaled(lower)...value.scaled(upper),
                                     step: value.scaled(stepValue))
+                                    .tint(AppPalette.accent)
                                 Text(upper.description).font(.caption2).foregroundStyle(.secondary)
                             }
                             Text((current(templateIndex, optionIndex) as? SetOption)?
@@ -423,7 +421,9 @@ struct TemplatesView: View {
     private func optionControl<Content: View>(title: String,
                                               @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.subheadline)
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.secondary)
             content()
         }
     }
@@ -460,32 +460,35 @@ struct TemplatesView: View {
         return parts.joined(separator: " ")
     }
 
-    private func errorSection(_ message: String) -> some View {
-        Section {
-            NativeSafetyNote(message)
+    private func statusCard(_ text: String) -> some View {
+        AppCard {
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(statusTone.nativeColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func errorCard(_ message: String) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 8) {
+                AppCardHeader(icon: "exclamationmark.triangle.fill",
+                              title: "Import failed",
+                              tint: AppPalette.danger)
+                NativeSafetyNote(message)
+            }
         }
     }
 
     // MARK: - Selection plumbing
 
-    /// The option currently held by the selection, read fresh each time.
-    ///
-    /// A binding getter rather than a captured value: the option is a `struct`
-    /// inside an array inside another `struct`, so a captured copy would write
-    /// into a copy and the control would not move.
     private func current(_ templateIndex: Int, _ optionIndex: Int) -> TemplateOption? {
         guard let template = selection.templates[safe: templateIndex],
               template.options.indices.contains(optionIndex) else { return nil }
         return template.options[optionIndex]
     }
 
-    /// Change one option and persist the template.
-    ///
-    /// Generic over the option's concrete type rather than taking a closure over
-    /// `Any`: an option is a `struct` inside an array inside another `struct`,
-    /// so the change has to be made on a mutable copy and written back by name.
-    /// A `(Any) -> Void` closure cannot do that — it would mutate its own copy
-    /// and the control would not move.
     private func mutate<T: TemplateOption>(_ templateIndex: Int, _ optionIndex: Int,
                                            as type: T.Type,
                                            _ change: (inout T) -> Void) {
@@ -539,9 +542,6 @@ struct TemplatesView: View {
         defer { replaceTarget = nil }
         do {
             let url = try result.get()
-            // Copied into the app's container, for the same reason a `.tendies`
-            // pack is: the picker's URL is security-scoped and its access ends
-            // with the callback, while the file is not read until Apply.
             let stored = try TemplateChoices.store(url, in: AppPaths.templateChoices)
             mutate(target.template, target.option, as: ReplaceOption.self) { opt in
                 opt.value = stored
