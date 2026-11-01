@@ -1,33 +1,30 @@
 import SwiftUI
 import UIKit
 
-// Theme chung cho toàn app. Sửa ở đây là đổi cả app.
-// Nhẹ hơn, ấm hơn, ít "nhựa" hơn: accent cam đất, card dùng material thật,
-// đổ bóng hai lớp, typography dùng text style hệ thống.
-
-// MARK: - Bảng màu
+// Theme chung. Đã tối ưu cho cuộn mượt:
+// - Card dùng solid color + 1 shadow nhỏ (bỏ material blur + double shadow)
+// - Chip dùng solid tint (bỏ material)
+// - Button 1 shadow nhỏ (bỏ double shadow)
+// - Gradient vẫn giữ ở button để không phẳng, nhưng rất nhẹ.
 
 enum AppPalette {
-    /// Accent chính — cam đất ấm, ~#DE7034. Không chói như #FF6B0D.
     static let accent     = Color(red: 0.87, green: 0.44, blue: 0.20)
     static let accentDeep = Color(red: 0.72, green: 0.34, blue: 0.13)
     static let danger     = Color(red: 0.88, green: 0.31, blue: 0.28)
     static let success    = Color(red: 0.22, green: 0.68, blue: 0.38)
     static let warning    = Color(red: 0.90, green: 0.58, blue: 0.12)
 
-    // Góc — iOS 26 mềm hơn
-    static let rCard:   CGFloat = 26
-    static let rInner:  CGFloat = 18
-    static let rButton: CGFloat = 18
+    static let rCard:   CGFloat = 24
+    static let rInner:  CGFloat = 16
+    static let rButton: CGFloat = 16
     static let rSmall:  CGFloat = 12
 
-    // Khoảng cách
-    static let sCard:   CGFloat = 18
-    static let sGap:    CGFloat = 12
+    static let sCard:   CGFloat = 16
+    static let sGap:    CGFloat = 10
     static let sScreen: CGFloat = 16
 }
 
-// MARK: - Ghi chú
+// MARK: - Notes
 
 struct NativeNote: View {
     let text: String
@@ -51,10 +48,7 @@ struct NativeSafetyNote: View {
     }
 }
 
-// MARK: - Nút cũ (giữ tên, đổi da)
-//
-// Tên và chữ ký giữ nguyên để không vỡ trang nào. Chỉ style đổi:
-// gradient nhẹ, không "kính" chói, chữ trắng trên nền accent ấm.
+// MARK: - Legacy buttons
 
 struct NativePrimaryButton: View {
     let title: String
@@ -78,19 +72,13 @@ struct NativePrimaryButton: View {
             .padding(.vertical, 14)
             .foregroundStyle(.white)
             .background(
-                LinearGradient(
-                    colors: [AppPalette.accent, AppPalette.accentDeep],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ).opacity(disabled ? 0.35 : 1),
+                LinearGradient(colors: [AppPalette.accent, AppPalette.accentDeep],
+                               startPoint: .top, endPoint: .bottom)
+                    .opacity(disabled ? 0.35 : 1),
                 in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
-            )
-            .shadow(color: AppPalette.accentDeep.opacity(disabled ? 0 : 0.25),
-                    radius: 10, y: 4)
+            .shadow(color: AppPalette.accentDeep.opacity(disabled ? 0 : 0.18),
+                    radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(running || disabled)
@@ -116,24 +104,20 @@ struct NativeDangerButton: View {
             .padding(.vertical, 14)
             .foregroundStyle(.white)
             .background(
-                LinearGradient(
-                    colors: [AppPalette.danger, AppPalette.danger.opacity(0.82)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ).opacity(disabled ? 0.35 : 1),
+                LinearGradient(colors: [AppPalette.danger, AppPalette.danger.opacity(0.82)],
+                               startPoint: .top, endPoint: .bottom)
+                    .opacity(disabled ? 0.35 : 1),
                 in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-            )
+            .shadow(color: AppPalette.danger.opacity(disabled ? 0 : 0.15),
+                    radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(disabled)
     }
 }
 
-// MARK: - Header thu gọn
+// MARK: - Collapsible header
 
 struct NativeCollapsibleHeader: View {
     let title: String
@@ -141,7 +125,7 @@ struct NativeCollapsibleHeader: View {
 
     var body: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.18)) { collapsed.toggle() }
+            withAnimation(.easeOut(duration: 0.16)) { collapsed.toggle() }
         } label: {
             HStack(spacing: 6) {
                 Text(title)
@@ -171,7 +155,7 @@ struct NativeLogo: View {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(Color(uiColor: .tertiarySystemGroupedBackground))
                     .overlay(
                         Image(systemName: "shippingbox.fill")
                             .font(.system(size: size * 0.4))
@@ -181,10 +165,6 @@ struct NativeLogo: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-        )
     }
 
     private static let bundledIcon: UIImage? = {
@@ -216,7 +196,7 @@ extension GoldenTone {
     }
 }
 
-// MARK: - Bàn phím
+// MARK: - Keyboard
 
 extension View {
     func nativeKeyboardDone() -> some View { modifier(NativeKeyboardDone()) }
@@ -240,11 +220,10 @@ struct NativeKeyboardDone: ViewModifier {
     }
 }
 
-// MARK: - Thẻ
+// MARK: - Card
 //
-// Bề mặt material thật, không phải solid color. Đổ bóng hai lớp mềm
-// (một lớp xa làm nền, một lớp gần làm cạnh) — đây là thứ làm card
-// hết "nhựa".
+// Đã bỏ material blur (nguyên nhân chính gây lag cuộn).
+// Solid fill + 1 shadow nhỏ + overlay gradient 3% (rẻ hơn material nhiều).
 
 struct AppCard<Content: View>: View {
     var padding: CGFloat = AppPalette.sCard
@@ -256,18 +235,25 @@ struct AppCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
                     .overlay(
                         RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.03), .clear],
+                                    startPoint: .top,
+                                    endPoint: .center
+                                )
+                            )
                     )
             )
-            .shadow(color: .black.opacity(0.06), radius: 18, x: 0, y: 6)
-            .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+            .overlay(
+                RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.04), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
 }
-
-// MARK: - Header thẻ
 
 struct AppCardHeader: View {
     let icon: String
@@ -288,10 +274,7 @@ struct AppCardHeader: View {
     }
 }
 
-// MARK: - Nút phẳng
-//
-// Gradient rất nhẹ từ accent sang accentDeep — đủ để không phẳng nhưng
-// không chói. Không có ring, không "kính".
+// MARK: - Button
 
 struct AppButton: View {
     let title: String
@@ -316,19 +299,13 @@ struct AppButton: View {
             .padding(.vertical, 14)
             .foregroundStyle(.white)
             .background(buttonBackground, in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
-            )
-            .shadow(color: shadowTint.opacity(disabled ? 0 : 0.22), radius: 8, y: 3)
+            .shadow(color: shadowTint.opacity(disabled ? 0 : 0.18), radius: 4, y: 2)
         }
         .buttonStyle(.plain)
         .disabled(disabled || running)
     }
 
-    private var shadowTint: Color {
-        destructive ? AppPalette.danger : AppPalette.accentDeep
-    }
+    private var shadowTint: Color { destructive ? AppPalette.danger : AppPalette.accentDeep }
 
     private var buttonBackground: some ShapeStyle {
         let base = destructive ? AppPalette.danger : AppPalette.accent
@@ -339,6 +316,8 @@ struct AppButton: View {
 }
 
 // MARK: - Chip
+//
+// Bỏ material, dùng solid tint. Rẻ hơn nhiều.
 
 struct AppChip: View {
     let text: String
@@ -358,28 +337,21 @@ struct AppChip: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .foregroundStyle(tone.nativeColor)
-        .background(
-            RoundedRectangle(cornerRadius: 999, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 999, style: .continuous)
-                        .strokeBorder(tone.nativeColor.opacity(0.18), lineWidth: 0.5)
-                )
-        )
+        .background(tone.nativeColor.opacity(0.12), in: Capsule(style: .continuous))
     }
 }
 
-// MARK: - Đường kẻ
+// MARK: - Divider
+//
+// Dùng Divider() hệ thống — được tối ưu ở tầng render.
 
 struct AppDivider: View {
     var body: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.06))
-            .frame(height: 0.5)
+        Divider()
     }
 }
 
-// MARK: - Trạng thái trống
+// MARK: - Empty state
 
 struct AppEmptyState: View {
     let icon: String
