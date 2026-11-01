@@ -64,7 +64,7 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(spacing: AppPalette.sGap) {
                 heroCard
                 applyCard
                 mediaCard
@@ -73,7 +73,7 @@ struct HomeView: View {
                 if !status.isEmpty { statusCard }
                 if !runLog.lines.isEmpty { logCard }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, AppPalette.sScreen)
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
@@ -141,11 +141,6 @@ struct HomeView: View {
     }
 
     // MARK: - Hero
-    //
-    // Horizontal layout, left-aligned: logo on the left, name over the device
-    // description on the right, the refresh control on the far right. The status
-    // chips sit underneath. The old page centred everything in a vertical stack;
-    // this is the biggest visual difference from the previous layout.
 
     private var heroCard: some View {
         AppCard {
@@ -172,10 +167,7 @@ struct HomeView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.primary)
                             .frame(width: 36, height: 36)
-                            .background(
-                                Color.primary.opacity(0.06),
-                                in: Circle()
-                            )
+                            .background(Color.primary.opacity(0.06), in: Circle())
                             .rotationEffect(.degrees(readingDevice ? 360 : 0))
                             .animation(
                                 readingDevice
@@ -213,9 +205,6 @@ struct HomeView: View {
     }
 
     // MARK: - Apply
-    //
-    // Button first, note underneath. The old page put the note first, which
-    // pushed the button under the fold.
 
     private var applyCard: some View {
         AppCard {
@@ -364,7 +353,7 @@ struct HomeView: View {
                               ? "checkmark.seal.fill"
                               : "doc.badge.plus")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(paired ? Color.green : AppPalette.accent)
+                            .foregroundStyle(paired ? AppPalette.success : AppPalette.accent)
                         Text(paired ? "Pairing & tunnel" : "Pair the device")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.primary)
@@ -373,21 +362,21 @@ struct HomeView: View {
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(16)
+                    .padding(AppPalette.sCard)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
                 if connectionExpanded {
-                    Divider().padding(.horizontal, 16)
+                    AppDivider().padding(.horizontal, AppPalette.sCard)
                     VStack(alignment: .leading, spacing: 14) {
                         pairingRows
                         if paired {
-                            Divider()
+                            AppDivider()
                             tunnelEditor
                         }
                     }
-                    .padding(16)
+                    .padding(AppPalette.sCard)
                 }
             }
         }
@@ -512,17 +501,13 @@ struct HomeView: View {
     private var tunnelPrefixOK: Bool { Tunnel.validPrefixLength(tunnelPrefixLength) != nil }
 
     // MARK: - Reset
-    //
-    // Its own card, separated from Apply on purpose: the two are one thumb away
-    // from each other and one is destructive. The card header uses the danger
-    // tone so the whole card reads as "this one does damage".
 
     private var resetCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
                               title: "Reset",
-                              tint: .red)
+                              tint: AppPalette.danger)
                 AppButton(
                     title: "Reset tweaks to stock",
                     systemImage: "arrow.counterclockwise",
@@ -536,7 +521,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Status banner
+    // MARK: - Status
 
     private var statusCard: some View {
         AppCard {
@@ -549,10 +534,6 @@ struct HomeView: View {
     }
 
     // MARK: - Log
-    //
-    // A card-wrapped terminal. `RunLogCard` still holds the tailing logic; the
-    // card here just gives it a header and a frame so the page reads as one
-    // stack, not a List that drops a section at the bottom.
 
     private var logCard: some View {
         AppCard(padding: 14) {
@@ -590,7 +571,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Derived state
+    // MARK: - Derived
 
     private var paired: Bool { pairingFileURL != nil }
 
@@ -632,7 +613,7 @@ struct HomeView: View {
         return lines.joined(separator: "\n\n")
     }
 
-    // MARK: - Logic (unchanged from the previous file)
+    // MARK: - Logic
 
     func resetPairing() {
         pairingFileRaw = nil
@@ -652,7 +633,6 @@ struct HomeView: View {
             ("stored PairingFile", pairingFileRaw),
             ("Info.plist ALTPairingFile", embedded),
         ]
-
         for (source, rawOpt) in candidates {
             guard let raw = rawOpt?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { continue }
             guard PairingRecord.usable(raw) else {
