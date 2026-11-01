@@ -1,7 +1,6 @@
 import SwiftUI
 
-// Row tweak. InstantSwitch vẽ tay (không lag, phản hồi tức thì).
-// Bật = gradient cam Liquid Glass, tắt = systemFill.
+// Row tweak. InstantSwitch vẽ tay — bật tức thì, không phụ thuộc Toggle hệ thống.
 
 struct TweakRow: View, Equatable {
     @ObservedObject private var hotload = HotLoadService.shared
@@ -62,6 +61,8 @@ struct TweakRow: View, Equatable {
         }
     }
 
+    // MARK: - Toggle (custom, tức thì)
+
     private var toggleRow: some View {
         Button {
             handleTap(!optimisticOn)
@@ -86,6 +87,8 @@ struct TweakRow: View, Equatable {
         }
     }
 
+    // MARK: - Text
+
     private var textRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(spec.title).font(.subheadline.weight(.medium))
@@ -104,6 +107,8 @@ struct TweakRow: View, Equatable {
         }
         .padding(.vertical, 6)
     }
+
+    // MARK: - Number
 
     private var numberRow: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -125,8 +130,11 @@ struct TweakRow: View, Equatable {
     }
 }
 
-// Switch với Liquid Glass gradient cam khi bật. Vẽ bằng Capsule + Circle,
-// native Metal compositing, không lag như Toggle hệ thống.
+// MARK: - InstantSwitch
+//
+// fillStyle trả 2 type khác nhau (LinearGradient vs Color) → opaque `some
+// ShapeStyle` không resolve được vì `_ConditionalContent` không conform
+// `ShapeStyle`. Phải bọc trong `AnyShapeStyle`.
 
 struct InstantSwitch: View {
     let isOn: Bool
@@ -152,19 +160,20 @@ struct InstantSwitch: View {
         .animation(.easeOut(duration: 0.14), value: isOn)
     }
 
-    @ViewBuilder
-    private var fillStyle: some ShapeStyle {
+    private var fillStyle: AnyShapeStyle {
         if isOn {
-            LinearGradient(
+            AnyShapeStyle(LinearGradient(
                 colors: [AppPalette.accent, AppPalette.accentDeep],
                 startPoint: .top,
                 endPoint: .bottom
-            )
+            ))
         } else {
-            Color(uiColor: .systemFill)
+            AnyShapeStyle(Color(uiColor: .systemFill))
         }
     }
 }
+
+// MARK: - Number field
 
 struct TweakNumberField: View {
     let spec: TweakSpec
@@ -194,6 +203,8 @@ struct TweakNumberField: View {
             .onSubmit { draft = display }
     }
 }
+
+// MARK: - Captions
 
 private struct TweakRowLabel: View {
     let title: String
