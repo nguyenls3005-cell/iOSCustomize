@@ -45,21 +45,7 @@ struct FilesView: View {
     var body: some View {
         List {
             if entries.isEmpty, !loading, error == nil {
-                ContentUnavailableView {
-                    Label("Folder is Empty", systemImage: "folder")
-                } description: {
-                    Text(path.isEmpty
-                         ? "The device's AFC service published nothing here."
-                         : "\(path[path.count - 1]) has nothing in it.")
-                } actions: {
-                    Button("New Folder") {
-                        newFolderName = ""; showNewFolder = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppPalette.accent)
-                }
-                .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
+                emptyStateRow
             }
 
             ForEach(entries) { entry in
@@ -115,7 +101,8 @@ struct FilesView: View {
                 }
                 Menu {
                     Button {
-                        newFolderName = ""; showNewFolder = true
+                        newFolderName = ""
+                        showNewFolder = true
                     } label: {
                         Label("New Folder", systemImage: "folder.badge.plus")
                     }
@@ -165,6 +152,45 @@ struct FilesView: View {
                      : "\(AfcFileExplorer.format(deleting.size)) on the device, removed with no trash and no undo.")
             }
         }
+    }
+
+    // MARK: - Empty state
+    //
+    // Replaces ContentUnavailableView with a simple card row — the builder
+    // version was what type-check failed on, and the plain row reads better
+    // on a themed page anyway.
+
+    private var emptyStateRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: "folder")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(AppPalette.accent.opacity(0.7))
+            Text("Folder is Empty")
+                .font(.system(size: 16, weight: .semibold))
+            Text(path.isEmpty
+                 ? "The device's AFC service published nothing here."
+                 : "\(path[path.count - 1]) has nothing in it.")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+            Button {
+                newFolderName = ""
+                showNewFolder = true
+            } label: {
+                Text("New Folder")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(AppPalette.accent,
+                                in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 4)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     // MARK: - Banner
