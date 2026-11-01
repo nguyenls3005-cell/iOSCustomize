@@ -1,19 +1,14 @@
 import SwiftUI
 import UIKit
 
-// Full Liquid Glass theme. Backdrop tĩnh, card dùng .regularMaterial +
-// .compositingGroup() để cache blur, nút dùng .glassProminent native.
-// Đây là combo duy nhất vừa đẹp vừa mượt trên iOS 26.
+// Theme chung. Backdrop mesh gradient tĩnh, card .regularMaterial +
+// compositingGroup(), nút Liquid Glass native.
 
 enum AppPalette {
-    // Cam tươi — #FF7A00
     static let accent     = Color(red: 1.00, green: 0.48, blue: 0.00)
     static let accentDeep = Color(red: 0.92, green: 0.38, blue: 0.00)
-    // Đỏ iOS — #FF3B30
     static let danger     = Color(red: 1.00, green: 0.23, blue: 0.19)
-    // Xanh iOS — #34C759
     static let success    = Color(red: 0.20, green: 0.78, blue: 0.35)
-    // Vàng iOS — #FFCC00
     static let warning    = Color(red: 1.00, green: 0.80, blue: 0.00)
 
     static let rCard:   CGFloat = 24
@@ -26,9 +21,6 @@ enum AppPalette {
 }
 
 // MARK: - Backdrop
-//
-// Mesh gradient TĨNH — không animate. iOS cache kết quả blur của các card
-// đè lên, nên scroll vẫn 60fps. Đổi sang animate là lag ngay.
 
 struct AppBackdrop: View {
     @Environment(\.colorScheme) private var scheme
@@ -247,11 +239,6 @@ struct NativeKeyboardDone: ViewModifier {
 }
 
 // MARK: - Card
-//
-// Bí quyết mượt: .regularMaterial (rẻ hơn ultraThin vì ít lớp) +
-// .compositingGroup() (rasterize card thành 1 layer, không composite
-// từng subview khi scroll). Border accent 0.10 để card không chìm vào
-// nền gradient.
 
 struct AppCard<Content: View>: View {
     var padding: CGFloat = AppPalette.sCard
@@ -274,7 +261,7 @@ struct AppCard<Content: View>: View {
     }
 }
 
-// MARK: - Header thẻ
+// MARK: - Card header
 
 struct AppCardHeader: View {
     let icon: String
@@ -299,7 +286,11 @@ struct AppCardHeader: View {
     }
 }
 
-// MARK: - Button phổ thông
+// MARK: - Button
+//
+// .glassProminent và .glass là PrimitiveButtonStyle, không phải ButtonStyle.
+// Ternary không resolve được (`some ButtonStyle` không nhận PrimitiveButtonStyle
+// trực tiếp) → phải tách if/else trong Group để mỗi nhánh có style riêng.
 
 struct AppButton: View {
     let title: String
@@ -311,22 +302,33 @@ struct AppButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if running {
-                    ProgressView().controlSize(.small)
-                } else if let systemImage {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                Text(title).font(.callout.weight(.semibold))
+        Group {
+            if prominent {
+                Button(action: action, label: labelContent)
+                    .buttonStyle(.glassProminent)
+                    .tint(destructive ? AppPalette.danger : AppPalette.accent)
+            } else {
+                Button(action: action, label: labelContent)
+                    .buttonStyle(.glass)
+                    .tint(destructive ? AppPalette.danger : AppPalette.accent)
             }
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(prominent ? .glassProminent : .glass)
-        .tint(destructive ? AppPalette.danger : AppPalette.accent)
         .controlSize(.large)
         .disabled(disabled || running)
+    }
+
+    @ViewBuilder
+    private func labelContent() -> some View {
+        HStack(spacing: 8) {
+            if running {
+                ProgressView().controlSize(.small)
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+            }
+            Text(title).font(.callout.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -360,9 +362,7 @@ struct AppChip: View {
     }
 }
 
-// MARK: - Metric tile (dùng cho stats row)
-//
-// Ô nhỏ hiển thị số liệu. Material nhẹ + compositingGroup để cache.
+// MARK: - Metric tile
 
 struct MetricTile: View {
     let icon: String
