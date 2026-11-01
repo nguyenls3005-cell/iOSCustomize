@@ -9,7 +9,7 @@ struct PosterBoardView: View {
 
     @ObservedObject private var device = DeviceIdentityMonitor.shared
     private var identity: DeviceIdentity { device.current }
-    @State private var databaseSummary = "not checked yet"
+    @State private var databaseSummary = "chưa kiểm tra"
     @State private var pickError: String?
     @State private var status: String?
     @State private var statusTone: GoldenTone = .secondary
@@ -19,30 +19,32 @@ struct PosterBoardView: View {
     @State private var showPackImporter = false
     @State private var showVideoImporter = false
     @State private var showThumbnailImporter = false
-
     @State private var applyMode: PosterBoardApplyMode = .backup
     @State private var legacyPrompt: LegacyConvertPrompt?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                deviceCard
-                applyModeCard
-                if applyMode != .airlift { databaseCard }
-                packsCard
-                videoCard
-                resetCard
-                if applyMode == .airlift { airliftApplyCard }
-                applyExplainCard
-                if let pickError { errorCard(pickError) }
-                if !statusText.isEmpty { statusCard }
-                RunLogCard()
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    deviceCard
+                    applyModeCard
+                    if applyMode != .airlift { databaseCard }
+                    packsCard
+                    videoCard
+                    resetCard
+                    if applyMode == .airlift { airliftApplyCard }
+                    applyExplainCard
+                    if let pickError { errorCard(pickError) }
+                    if !statusText.isEmpty { statusCard }
+                    RunLogCard()
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("PosterBoard")
+        .tint(AppPalette.accent)
+        .navigationTitle("Hình nền")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await device.refresh()
@@ -56,9 +58,9 @@ struct PosterBoardView: View {
                 deviceVersion: identity.version, buildVersion: identity.buildVersion)
         }
         .legacyConvertPrompt($legacyPrompt, answer: answerLegacyPrompt)
-        .alert("HotLoad warning", isPresented: $showHotLoadWarning) {
-            Button("Cancel", role: .cancel) {}
-            Button("Continue anyway", role: .destructive) { applyViaAirlift() }
+        .alert("Cảnh báo HotLoad", isPresented: $showHotLoadWarning) {
+            Button("Huỷ", role: .cancel) {}
+            Button("Vẫn tiếp tục", role: .destructive) { applyViaAirlift() }
         } message: {
             Text(hotloadWarnings.joined(separator: "\n\n"))
         }
@@ -68,8 +70,8 @@ struct PosterBoardView: View {
         legacyPrompt = nil
         _ = prompt.pack.settingAutoConvert(convert)
         RunLog.shared.append(convert
-            ? "PosterBoard: \(prompt.pack.name) will be converted to the modern format on Apply (legacy: \(prompt.families.joined(separator: ", ")))."
-            : "PosterBoard: \(prompt.pack.name) stays in its original legacy format (\(prompt.families.joined(separator: ", "))).")
+            ? "PosterBoard: \(prompt.pack.name) sẽ chuyển sang định dạng mới khi Apply (legacy: \(prompt.families.joined(separator: ", ")))."
+            : "PosterBoard: \(prompt.pack.name) giữ nguyên định dạng cũ (\(prompt.families.joined(separator: ", "))).")
         selection.loadFromDisk()
     }
 
@@ -77,23 +79,35 @@ struct PosterBoardView: View {
 
     private var deviceCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(identity.describe).font(.system(size: 15, weight: .semibold))
-                NativeNote("Wallpapers are delivered as files into this app's own backup of the device, in the \(PosterBoard.domain) domain — the same channel the tweaks use. Nothing is written to the device until Apply.")
+            HStack(spacing: 12) {
+                Image(systemName: "photo.artframe")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppPalette.accent)
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(AppPalette.accent.opacity(0.15)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(identity.describe).font(.subheadline.weight(.semibold))
+                    Text("Domain: \(PosterBoard.domain)")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer()
             }
+            NativeNote("Hình nền được đưa vào bản backup của app trong domain \(PosterBoard.domain) — cùng kênh với tinh chỉnh. Chưa ghi gì vào thiết bị cho đến khi Apply.")
         }
     }
 
     private var applyModeCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "wand.and.stars", title: "Apply mode")
-                Picker("How to apply", selection: $applyMode) {
+                AppCardHeader(icon: "wand.and.stars", title: "Chế độ áp dụng")
+                Picker("Cách áp dụng", selection: $applyMode) {
                     ForEach(PosterBoardApplyMode.allCases.filter { $0 != .airlift || !airliftHidden }) { mode in
                         Text(mode.title).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
+                .tint(AppPalette.accent)
                 .onChange(of: applyMode) { _, mode in
                     if !airliftHidden { PosterBoardApplyModeSettings.current = mode }
                 }
@@ -102,10 +116,10 @@ struct PosterBoardView: View {
                     NativeSafetyNote(airliftBlocker)
                 }
                 if applyMode == .airlift {
-                    NativeNote("The store database is not part of this mode, so its card is hidden: the injection writes the descriptors straight into the container and the rows are not touched. Automatic refresh is ignored too.")
+                    NativeNote("Store database không thuộc chế độ này — card database bị ẩn: inject ghi descriptors thẳng vào container, không chạm rows. Auto-refresh cũng bị bỏ qua.")
                 }
                 if !selection.resetModes.isEmpty, !applyMode.supportsReset {
-                    NativeSafetyNote("The reset you have selected cannot be done over AirLift. Switch back to Protective backup to keep it.")
+                    NativeSafetyNote("Reset bạn chọn không thực hiện được qua AirLift. Chuyển về Protective backup để giữ reset.")
                 }
             }
         }
@@ -119,7 +133,7 @@ struct PosterBoardView: View {
         let reason = Airlift.unsupportedReason(deviceVersion: identity.version, buildVersion: identity.buildVersion)
         if !reason.isEmpty { return reason }
         if !FileManager.default.fileExists(atPath: AppPaths.pairingFile.path) {
-            return "AirLift needs a pairing record and none is stored. Import one on the home page."
+            return "AirLift cần tệp ghép nối. Nhập ở trang chủ."
         }
         return ""
     }
@@ -128,12 +142,13 @@ struct PosterBoardView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 AppCardHeader(icon: "cylinder.split.1x2", title: "Store database")
-                Toggle("Automatic refresh", isOn: $selection.autoRefresh)
+                Toggle("Tự động làm mới", isOn: $selection.autoRefresh)
                     .tint(AppPalette.accent)
-                AppButton(title: "Fetch database from device",
+                AppButton(title: "Tải database từ thiết bị",
                           systemImage: "arrow.down.circle",
                           running: running,
-                          disabled: running) {
+                          disabled: running,
+                          prominent: false) {
                     fetchDatabase()
                 }
                 NativeNote(databaseNote)
@@ -143,11 +158,11 @@ struct PosterBoardView: View {
 
     private var databaseNote: String {
         var lines = [
-            "Fetched database: \(databaseSummary)",
-            "A wallpaper exists in two places at once — its descriptor files, and three rows in the store's own sqlite. The rows carry the device's provider registrations and the metadata the picker sorts by, so they cannot be invented: the apply fetches the store from the device first and adds rows to a copy of it.",
+            "Database đã tải: \(databaseSummary)",
+            "Một hình nền tồn tại ở 2 nơi: tệp descriptors, và 3 rows trong sqlite của store. Rows mang provider registration + metadata picker sắp xếp theo — không thể tạo giả. Apply tải store từ thiết bị trước, rồi thêm rows vào bản copy.",
         ]
         if selection.autoRefresh {
-            lines.append("Automatic refresh is on (upstream's default): each apply also writes PBF_RESET_FILE_PROTECTIONS, which is what makes PosterBoard re-read the store at boot. Turn it off to leave the device's preferences alone.")
+            lines.append("Auto-refresh bật (mặc định upstream): mỗi lượt Apply cũng ghi PBF_RESET_FILE_PROTECTIONS, buộc PosterBoard đọc lại store lúc boot. Tắt để giữ nguyên preference thiết bị.")
         }
         return lines.joined(separator: "\n\n")
     }
@@ -156,17 +171,17 @@ struct PosterBoardView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
                 AppCardHeader(icon: "photo.stack",
-                              title: "Wallpaper packs (\(selection.tendies.count))")
+                              title: "Bộ hình nền (\(selection.tendies.count))")
                 NavigationLink(value: AppDestination.wallpaperDownloads) {
                     HStack(spacing: 10) {
                         Image(systemName: "square.and.arrow.down")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Download Wallpapers").font(.system(size: 15, weight: .medium))
+                        Text("Tải hình nền").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.tertiary)
                     }
                     .padding(.vertical, 4)
@@ -182,7 +197,7 @@ struct PosterBoardView: View {
                         Image(systemName: "plus.circle")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Import .tendies pack").font(.system(size: 15, weight: .medium))
+                        Text("Nhập bộ .tendies").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -196,7 +211,7 @@ struct PosterBoardView: View {
                 }
 
                 if selection.tendies.isEmpty {
-                    NativeNote("No packs imported yet. A `.tendies` file is a ZIP holding a wallpaper's descriptor; import one from a wallpaper collection (Cowabunga and CaPlayground publish them), then Apply.")
+                    NativeNote("Chưa nhập bộ nào. `.tendies` là ZIP chứa descriptor; nhập từ bộ sưu tập (Cowabunga, CaPlayground), rồi Apply.")
                 } else {
                     ForEach(selection.tendies) { pack in
                         AppDivider()
@@ -210,7 +225,7 @@ struct PosterBoardView: View {
                             Image(systemName: "trash")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppPalette.danger)
-                            Text("Remove all packs").font(.system(size: 15, weight: .medium))
+                            Text("Xoá tất cả bộ").font(.subheadline.weight(.medium))
                                 .foregroundStyle(AppPalette.danger)
                             Spacer()
                         }
@@ -219,9 +234,9 @@ struct PosterBoardView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(running)
-                    NativeNote("Upstream caps a selection at \(PosterBoardImports.descriptorLimit) descriptors. Each pack is copied into this app, so removing one here removes the copy — the file you imported is untouched.")
+                    NativeNote("Upstream giới hạn selection ở \(PosterBoardImports.descriptorLimit) descriptors. Mỗi bộ được copy vào app, xoá ở đây xoá bản copy — tệp gốc còn.")
                 }
-                Toggle("Convert legacy wallpapers to the modern format",
+                Toggle("Chuyển legacy sang định dạng mới",
                        isOn: Binding(get: { PosterBoardPreferences.autoConvertLegacy },
                                      set: { PosterBoardPreferences.autoConvertLegacy = $0 }))
                     .tint(AppPalette.accent)
@@ -232,13 +247,13 @@ struct PosterBoardView: View {
 
     private var legacyConvertNote: String {
         var lines = [
-            "iOS 27 builds the depth effect only for the modern (“Clownfish”) layout, so a pack made before iOS 27 is rewritten when it is applied — otherwise it installs and looks flat, with no depth. The rewrite re-stamps the family, drops external scripts and republishes the planes, and it is best effort: it can change how a wallpaper looks. A pack holding nothing pre-27 is left alone either way.",
+            "iOS 27 chỉ dựng hiệu ứng depth cho layout hiện đại (\"Clownfish\"), nên bộ tạo trước iOS 27 sẽ được viết lại khi áp dụng — nếu không sẽ cài phẳng, không có depth. Rewrite đóng dấu lại family, bỏ script ngoài và xuất lại planes, best effort: có thể đổi cách hình nền hiển thị. Bộ không chứa gì pre-27 được giữ nguyên.",
         ]
         if let atLeast27 = PosterBoard.compareVersion(identity.version, "27"), atLeast27 < 0 {
-            lines.append("This device is on iOS \(identity.version), which reads a legacy pack as it is, so nothing is converted here and no pack is asked about.")
+            lines.append("Thiết bị đang ở iOS \(identity.version) đọc legacy bộ nguyên bản, nên không chuyển gì và không hỏi bộ nào.")
         }
         if !PosterBoardPreferences.autoConvertLegacy {
-            lines.append("Conversion is off, so legacy packs are pushed with their original files.")
+            lines.append("Chuyển đổi tắt, legacy bộ đẩy với tệp gốc.")
         }
         return lines.joined(separator: "\n\n")
     }
@@ -247,7 +262,7 @@ struct PosterBoardView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(pack.name).font(.system(size: 14, weight: .medium))
+                    Text(pack.name).font(.footnote.weight(.medium))
                         .lineLimit(1).truncationMode(.middle)
                     Text(pack.summary).font(.caption)
                         .foregroundStyle(pack.isUnsafeContainer ? AppPalette.warning : Color.secondary)
@@ -266,7 +281,7 @@ struct PosterBoardView: View {
                 .disabled(running)
             }
             if !pack.isContainer {
-                Picker("Target extension", selection: Binding(
+                Picker("Phần mở rộng đích", selection: Binding(
                     get: { pack.posterType },
                     set: { chosen in
                         guard let index = selection.tendies.firstIndex(where: { $0.id == pack.id })
@@ -287,7 +302,7 @@ struct PosterBoardView: View {
     private var videoCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "film", title: "Video wallpaper")
+                AppCardHeader(icon: "film", title: "Video hình nền")
                 Button {
                     showVideoImporter = true
                 } label: {
@@ -295,7 +310,7 @@ struct PosterBoardView: View {
                         Image(systemName: "film")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Choose video").font(.system(size: 15, weight: .medium))
+                        Text("Chọn video").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         if let video = selection.video?.lastPathComponent {
                             Spacer()
@@ -311,12 +326,12 @@ struct PosterBoardView: View {
                               allowedContentTypes: [.movie, .video, .quickTimeMovie, .mpeg4Movie]) { result in
                     importMedia(result, into: PosterBoard.videoDirectory) { selection.video = $0 }
                 }
-                Toggle("Loop (CoreAnimation frame list)", isOn: $selection.loop)
+                Toggle("Lặp (CoreAnimation frame list)", isOn: $selection.loop)
                     .tint(AppPalette.accent)
                 if selection.loop {
-                    Toggle("Reverse on loop", isOn: $selection.reverse).tint(AppPalette.accent)
-                    Toggle("Cover the clock", isOn: $selection.foreground).tint(AppPalette.accent)
-                    Picker("Calculation mode", selection: $selection.calculationMode) {
+                    Toggle("Đảo khi lặp", isOn: $selection.reverse).tint(AppPalette.accent)
+                    Toggle("Phủ đồng hồ", isOn: $selection.foreground).tint(AppPalette.accent)
+                    Picker("Chế độ tính toán", selection: $selection.calculationMode) {
                         ForEach(PosterBoardCalculationMode.allCases) { mode in
                             Text(mode.title).tag(mode.rawValue)
                         }
@@ -329,8 +344,7 @@ struct PosterBoardView: View {
                             Image(systemName: "photo")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppPalette.accent)
-                            Text("Choose freeze frame (.heic)")
-                                .font(.system(size: 15, weight: .medium))
+                            Text("Chọn ảnh tĩnh (.heic)").font(.subheadline.weight(.medium))
                                 .foregroundStyle(.primary)
                             if let thumb = selection.thumbnail?.lastPathComponent {
                                 Spacer()
@@ -358,8 +372,7 @@ struct PosterBoardView: View {
                             Image(systemName: "xmark.circle")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(AppPalette.danger)
-                            Text("Clear the video choice")
-                                .font(.system(size: 15, weight: .medium))
+                            Text("Xoá lựa chọn video").font(.subheadline.weight(.medium))
                                 .foregroundStyle(AppPalette.danger)
                             Spacer()
                         }
@@ -376,13 +389,13 @@ struct PosterBoardView: View {
     private var videoNote: String {
         var lines = [String]()
         if selection.loop {
-            lines.append("Looping decodes the video to JPEG frames and hands PosterBoard a CoreAnimation frame list (up to \(PosterBoardVideo.frameLimit) frames, at the video's own resolution). It is slow, and the frames are written into the backup, so a long clip makes a large one — trim it first.")
-            lines.append("A video that carries a rotation transform is decoded in its stored orientation, which is what the reference's decoder does; such a clip may appear rotated on the Lock Screen.")
+            lines.append("Lặp giải mã video thành frames JPEG và đưa PosterBoard CoreAnimation frame list (tối đa \(PosterBoardVideo.frameLimit) frames, ở độ phân giải video). Chậm, frames ghi vào backup — cắt clip ngắn trước.")
+            lines.append("Video mang rotation transform được giải mã ở orientation lưu sẵn — đúng decoder của reference. Có thể hiển thị xoay trên Lock Screen.")
         } else {
-            lines.append("The live-photo method writes the video into a Photos poster descriptor and needs a freeze frame — the reference raises rather than shipping a descriptor with no thumbnail. The video is rewrapped as .mov unless it already is one.")
+            lines.append("Phương pháp live-photo ghi video vào Photos poster descriptor và cần ảnh tĩnh — reference raise thay vì ship descriptor không thumbnail. Video được rewrap thành .mov nếu chưa phải.")
         }
         if selection.loop && selection.reverse {
-            lines.append("Reverse on loop plays the clip forwards and then backwards.")
+            lines.append("Đảo khi lặp phát xuôi rồi ngược.")
         }
         return lines.joined(separator: "\n\n")
     }
@@ -390,8 +403,8 @@ struct PosterBoardView: View {
     private var resetCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "arrow.counterclockwise.circle", title: "Reset", tint: AppPalette.danger)
-                Toggle("Full reset — wipe everything and start empty", isOn: $selection.fullReset)
+                AppCardHeader(icon: "arrow.counterclockwise.circle", title: "Đặt lại", tint: AppPalette.danger)
+                Toggle("Reset toàn bộ — xoá sạch, bắt đầu trống", isOn: $selection.fullReset)
                     .tint(AppPalette.danger)
                 ForEach(PosterBoardResetMode.allCases) { mode in
                     Toggle(mode.rawValue, isOn: binding(for: mode))
@@ -415,25 +428,25 @@ struct PosterBoardView: View {
 
     private var resetWarning: String {
         if selection.fullReset {
-            return "Full reset: the store's Extensions, GalleryCache and Backups directories are zeroed and replaced with an empty database. Every wallpaper on the device is gone, and the database fetched before this point is stale — the next apply fetches a fresh one."
+            return "Reset toàn bộ: Extensions, GalleryCache và Backups của store bị zero, thay bằng database trống. Mọi hình nền trên máy mất, database tải trước đây thành stale — lượt Apply tiếp theo tải bản mới."
         }
         if selection.resetModes.isEmpty { return "" }
         let names = selection.resetModes.map(\.rawValue).sorted().joined(separator: ", ")
-        return "Selected: \(names). A reset is written as a 0-byte file over the folder, which is how the reference clears them; it runs without needing the store database, so it is the recovery path for a store that is already misbehaving. It does not undo anything already applied."
+        return "Đã chọn: \(names). Reset ghi tệp 0-byte đè lên thư mục — cách reference xoá chúng; chạy được mà không cần database, nên là đường cứu hộ khi store đã lỗi. Không undo cái đã áp dụng."
     }
 
     private var airliftApplyCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "bolt.horizontal.circle", title: "Apply via AirLift")
+                AppCardHeader(icon: "bolt.horizontal.circle", title: "Apply qua AirLift")
                 if selection.isActive {
-                    Text("Ready: \(selection.describe)")
-                        .font(.system(size: 14, weight: .medium))
+                    Text("Sẵn sàng: \(selection.describe)")
+                        .font(.footnote.weight(.medium))
                         .foregroundStyle(AppPalette.accent)
                 } else {
-                    NativeNote("No packs imported yet — import a `.tendies` above to apply it this way.")
+                    NativeNote("Chưa nhập bộ nào — nhập `.tendies` ở trên để áp dụng kiểu này.")
                 }
-                AppButton(title: "Apply via AirLift",
+                AppButton(title: "Apply qua AirLift",
                           systemImage: "bolt.horizontal.circle",
                           running: running,
                           disabled: !airliftAvailable) {
@@ -441,7 +454,7 @@ struct PosterBoardView: View {
                     else { showHotLoadWarning = true }
                 }
                 if !airliftBlocker.isEmpty { NativeSafetyNote(airliftBlocker) }
-                NativeNote("Writes the descriptors into \(PosterBoard.domain) over a tunnel and resprings, so it is live in seconds. No backup is taken, because nothing is delivered back to the device — but for the same reason it applies **only** the packs: tweaks need the backup, so they still go through the **Apply** button on the home page.")
+                NativeNote("Ghi descriptors vào \(PosterBoard.domain) qua tunnel và respring, có hiệu lực ngay. Không backup vì không đưa gì về thiết bị — nhưng vì thế chỉ áp dụng **bộ**: tinh chỉnh cần backup, vẫn đi qua **Apply** ở trang chủ.")
             }
         }
     }
@@ -454,17 +467,17 @@ struct PosterBoardView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 if applyMode == .airlift {
-                    NativeNote("The **Apply** button on the home page delivers the tweaks, and the wallpapers you picked go with them in one protective backup — it is a backup-mode run regardless of this page's setting. To apply the packs alone, with no backup, use **Apply via AirLift** above.")
+                    NativeNote("Nút **Apply** ở trang chủ đưa tinh chỉnh, và hình nền đang chọn đi cùng trong một protective backup — vẫn là backup-mode run bất kể cài đặt trang này. Muốn apply riêng bộ, không backup, dùng **Apply qua AirLift** ở trên.")
                 } else if selection.isActive {
-                    Text("Ready: \(selection.describe)")
-                        .font(.system(size: 14, weight: .medium))
+                    Text("Sẵn sàng: \(selection.describe)")
+                        .font(.footnote.weight(.medium))
                         .foregroundStyle(AppPalette.accent)
-                    NativeNote("Delivered by the **Apply** button on the home page, together with the tweaks. It fetches the store's database from the device first, so that run takes one extra exchange. Reboot the device afterwards — the store is read at boot.")
+                    NativeNote("Được đưa bởi nút **Apply** ở trang chủ, cùng tinh chỉnh. Tải store database từ thiết bị trước, nên lượt chạy tốn thêm một exchange. Khởi động lại máy sau — store đọc lúc boot.")
                 } else {
-                    NativeNote("Nothing selected yet. Whatever is picked here is delivered by the **Apply** button on the home page, together with the tweaks — one backup, one restore.")
+                    NativeNote("Chưa chọn gì. Mọi thứ chọn ở đây được đưa bởi nút **Apply** ở trang chủ cùng tinh chỉnh — một backup, một restore.")
                 }
                 if applyMode != .airlift {
-                    NativeNote("The database itself can be fetched on its own, from the card above — it is the one stage that can fail on its own terms (the device decides whether it will upload the container), so being able to run it, watch it and retry is worth its own button.")
+                    NativeNote("Bản thân database tải riêng được, từ card trên — đây là stage fail độc lập (thiết bị quyết định có upload container), nên có nút riêng để chạy, xem, retry đáng.")
                 }
             }
         }
@@ -475,7 +488,7 @@ struct PosterBoardView: View {
     private var statusCard: some View {
         AppCard {
             Text(statusText)
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(statusTone.nativeColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -486,21 +499,19 @@ struct PosterBoardView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Import failed",
+                              title: "Nhập thất bại",
                               tint: AppPalette.danger)
                 NativeSafetyNote(message)
             }
         }
     }
 
-    // MARK: - Behaviour
-
     private func refreshDatabaseSummary() {
         let directory = URL.documents.appendingPathComponent("PosterBoard", conformingTo: .data)
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         let candidates = names.filter { $0.hasSuffix(".sqlite3") }.sorted()
         guard let name = candidates.last else {
-            databaseSummary = "none yet — an apply that adds a wallpaper fetches one"
+            databaseSummary = "chưa có — Apply thêm hình nền sẽ tải về"
             return
         }
         let url = directory.appendingPathComponent(name)
@@ -511,7 +522,7 @@ struct PosterBoardView: View {
             return
         }
         let when = DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .short)
-        databaseSummary = "\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)), fetched \(when)"
+        databaseSummary = "\(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)), tải \(when)"
     }
 
     private func importPack(_ result: Result<URL, Error>) {
@@ -523,11 +534,11 @@ struct PosterBoardView: View {
                 let pack = try PosterBoardImports.import(from: url)
                 guard existing + pack.descriptorCount <= PosterBoardImports.descriptorLimit else {
                     PosterBoardImports.remove(pack)
-                    throw GoldenNuggetError("\(pack.name) carries \(pack.descriptorCount) descriptor(s), which would take the selection to \(existing + pack.descriptorCount). PosterBoard's picker gets unusable past \(PosterBoardImports.descriptorLimit) — remove a pack first.")
+                    throw GoldenNuggetError("\(pack.name) chứa \(pack.descriptorCount) descriptor, đưa selection lên \(existing + pack.descriptorCount). Picker PosterBoard không dùng được quá \(PosterBoardImports.descriptorLimit) — xoá bộ trước.")
                 }
                 selection.loadFromDisk()
                 pickError = nil
-                RunLog.shared.append("PosterBoard: imported \(pack.name) (\(pack.summary))")
+                RunLog.shared.append("PosterBoard: nhập \(pack.name) (\(pack.summary))")
                 if let prompt = pack.legacyConvertPrompt(deviceVersion: identity.version) {
                     legacyPrompt = prompt
                 }
@@ -558,17 +569,17 @@ struct PosterBoardView: View {
         running = true
         runStarted = Date()
         RunLog.shared.clear()
-        status = "Fetching the PosterBoard database…"
+        status = "Đang tải database PosterBoard…"
         statusTone = .accent
         Task {
             var text = ""
             var tone: GoldenTone = .primary
             do {
                 try await GoldenNuggetEngine.shared.fetchPosterBoardDatabase()
-                text = "Database fetched."
+                text = "Đã tải database."
                 tone = .success
             } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ stopped by the user (\(failure.label))"
+                text = "⏹ đã dừng (\(failure.label))"
                 tone = .warning
             } catch {
                 text = "❌ \(error.localizedDescription)"
@@ -589,7 +600,7 @@ struct PosterBoardView: View {
         running = true
         runStarted = Date()
         RunLog.shared.clear()
-        status = "Injecting the packs over AirLift…"
+        status = "Đang inject bộ qua AirLift…"
         statusTone = .accent
         Task {
             var text = ""
@@ -597,10 +608,10 @@ struct PosterBoardView: View {
             do {
                 try await GoldenNuggetEngine.shared.applyPosterBoardViaAirlift(
                     selection, deviceVersion: identity.version)
-                text = "Applied over AirLift. The device resprung — no backup was taken."
+                text = "Áp dụng qua AirLift. Máy respring — không backup."
                 tone = .success
             } catch let failure as TransportFailure where failure.isCancellation {
-                text = "⏹ stopped by the user (\(failure.label))"
+                text = "⏹ đã dừng (\(failure.label))"
                 tone = .warning
             } catch {
                 text = "❌ \(error.localizedDescription)"
