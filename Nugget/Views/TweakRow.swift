@@ -1,23 +1,18 @@
 import SwiftUI
 
-/// One tweak: its title, the control its kind calls for, and its id.
+/// One tweak row: its title, the control its kind calls for, and its id.
 ///
-/// Shared by the Tweaks and Daemons pages so a daemon row is not a lookalike of
-/// a tweak row but literally the same view.
-///
-/// The toggle's read and write are injected rather than read off the selection,
-/// because the two pages disagree about what "on" means: a tweak is on when its
-/// flag is set, a daemon group is on when every launchd label in it has to be
-/// written as disabled, and only the second one needs a value written alongside
-/// the flag. Everything else -- the text field, the numeric editor -- reads and
-/// writes the selection directly in both pages, so the selection is always
-/// carried rather than made optional: a row whose kind happens to be `.text`
-/// must not lose its editor because its toggle had a special meaning.
+/// Used inside `AppCard` sections in the redesigned Tweaks and Daemons pages,
+/// so this row itself has no card chrome — only the small inner padding that
+/// separates one row from the next. The read/write of the toggle is injected
+/// because the two pages disagree about what "on" means.
 struct TweakRow: View {
     @ObservedObject private var hotload = HotLoadService.shared
     @ObservedObject private var device = DeviceIdentityMonitor.shared
     private var safetyWarning: String? { hotload.currentPolicy.flag(for: spec) }
-    private var warningText: String { [spec.warning, safetyWarning].compactMap { $0 }.joined(separator: "\n\n") }
+    private var warningText: String {
+        [spec.warning, safetyWarning].compactMap { $0 }.joined(separator: "\n\n")
+    }
     let spec: TweakSpec
     @Binding private var selection: TweakSelection
     private let readOn: () -> Bool
@@ -28,21 +23,11 @@ struct TweakRow: View {
         self.init(spec: spec, selection: selection, readOn: nil, writeOn: nil)
     }
 
-    /// The daemon shape: same row, but the page decides what the switch means.
     init(spec: TweakSpec, selection: Binding<TweakSelection>,
          isOn: @escaping () -> Bool, setOn: @escaping (Bool) -> Void) {
         self.init(spec: spec, selection: selection, readOn: isOn, writeOn: setOn)
     }
 
-    /// The one that actually assigns.
-    ///
-    /// Its labels are `readOn`/`writeOn` — the stored properties' names — and not
-    /// `isOn`/`setOn` with optional types.  It used to be the latter, which made
-    /// the three-argument initializer above resolve *to itself* (the compiler
-    /// said so: "function call causes an infinite recursion") instead of to this
-    /// one, so every daemon row recursed until the stack ran out.  Distinct
-    /// labels make the choice unambiguous rather than a question of which
-    /// overload wins.
     private init(spec: TweakSpec, selection: Binding<TweakSelection>,
                  readOn: (() -> Bool)?, writeOn: ((Bool) -> Void)?) {
         self.spec = spec
@@ -58,22 +43,31 @@ struct TweakRow: View {
                 Toggle(isOn: toggleBinding) {
                     TweakRowLabel(title: spec.title, id: spec.id, detail: spec.detail)
                 }
+                .tint(AppPalette.accent)
             case .text:
                 VStack(alignment: .leading, spacing: 6) {
                     Text(spec.title)
+                        .font(.system(size: 15, weight: .medium))
                     if let safetyWarning { NativeSafetyNote(safetyWarning) }
                     TextField("(empty = clear)", text: textBinding)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                    TweakRowCaption(id: spec.id, detail: [spec.detail, spec.warning].compactMap { $0 }.joined(separator: "\n"))
+                    TweakRowCaption(
+                        id: spec.id,
+                        detail: [spec.detail, spec.warning].compactMap { $0 }.joined(separator: "\n")
+                    )
                 }
             case .number:
                 VStack(alignment: .leading, spacing: 6) {
                     Text(spec.title)
+                        .font(.system(size: 15, weight: .medium))
                     if let safetyWarning { NativeSafetyNote(safetyWarning) }
                     TweakNumberField(spec: spec, selection: $selection)
-                    TweakRowCaption(id: spec.id, detail: [spec.numberHint, spec.warning].compactMap { $0 }.joined(separator: "\n"))
+                    TweakRowCaption(
+                        id: spec.id,
+                        detail: [spec.numberHint, spec.warning].compactMap { $0 }.joined(separator: "\n")
+                    )
                 }
             }
             if spec.kind == .toggle, let safetyWarning { NativeSafetyNote(safetyWarning) }
@@ -103,30 +97,14 @@ struct TweakRow: View {
 
 /// A numeric editor that keeps its own draft text.
 ///
-/// Binding the field straight to the selection would fight the user: the value
-/// is clamped and re-typed on every keystroke, so an intermediate `""` or `1`
-/// would snap the field back mid-edit.  The draft holds what was typed, the
-/// selection holds what is valid, and committing on submit shows the latter.
+/// Unchanged from the original: the draft is seeded once in `init`, and the
+/// selection only writes back when a valid value can be parsed. See the
+/// original comment for why `onAppear` seeding was a bug.
 struct TweakNumberField: View {
     let spec: TweakSpec
     @Binding var selection: TweakSelection
     @State private var draft: String
 
-    /// The draft is seeded here, once, and never re-seeded.
-    ///
-    /// It used to be seeded in `onAppear` — and that assignment is a *change*
-    /// like any other, so `onChange(of: draft)` read it as "the user typed this"
-    /// and `setValue`, which switches the tweak on the way the reference's
-    /// `toggle_enabled=True` does, switched on every number tweak whose row
-    /// scrolled into view.  The page then reported 42 tweaks enabled after two
-    /// switches were flipped, 38 of them Liquid Glass: 39 of the 41 value-shaped
-    /// Liquid Glass specs are numbers, and the row that had not been scrolled to
-    /// yet was the difference.  The count grew as the user scrolled, which is
-    /// why it was the number on the way *out* that looked wrong.
-    ///
-    /// A flag set in the same `onAppear` cannot guard this, because `onChange`
-    /// runs in the update *after* it, when the flag is already set.  The only
-    /// way to keep the seed out of `onChange` is to not make it a change at all.
     init(spec: TweakSpec, selection: Binding<TweakSelection>) {
         self.spec = spec
         self._selection = selection
@@ -135,8 +113,6 @@ struct TweakNumberField: View {
 
     var body: some View {
         TextField("value", text: $draft)
-            // `.decimalPad` has no Return key: on a phone the keyboard would
-            // be impossible to dismiss.
             .keyboardType(.decimalPad)
             .nativeKeyboardDone()
             .textInputAutocapitalization(.never)
@@ -161,8 +137,9 @@ private struct TweakRowLabel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
+                .font(.system(size: 15, weight: .medium))
             Text(id)
-                .font(.caption)
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.tertiary)
             if let detail {
                 NativeNote(detail)
@@ -180,7 +157,7 @@ private struct TweakRowCaption: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(id)
-                .font(.caption)
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.tertiary)
             if let detail {
                 NativeNote(detail)
