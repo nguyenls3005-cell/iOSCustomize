@@ -13,7 +13,7 @@ struct CommunityCatalogView: View {
     @State private var busy: String?
     @State private var message = ""
     @State private var code = ""
-    @State private var codeName = "Shared preset"
+    @State private var codeName = "Preset chia sẻ"
     @State private var showImporter = false
     @State private var showCode = false
     @State private var sharedCode = ""
@@ -27,20 +27,23 @@ struct CommunityCatalogView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                filtersCard
-                presetsCard
-                templatesCard
-                shareCodeCard
-                if !library.templates.isEmpty { installedCard }
-                if !library.loadErrors.isEmpty { errorsCard }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    filtersCard
+                    presetsCard
+                    templatesCard
+                    shareCodeCard
+                    if !library.templates.isEmpty { installedCard }
+                    if !library.loadErrors.isEmpty { errorsCard }
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Community Catalog")
+        .tint(AppPalette.accent)
+        .navigationTitle("Catalog cộng đồng")
         .searchable(text: $search)
         .toolbar {
             Button {
@@ -67,20 +70,19 @@ struct CommunityCatalogView: View {
                         }
                         Text(sharedCode).font(.caption.monospaced()).textSelection(.enabled)
                         ShareLink(item: sharedCode) {
-                            Label("Share code", systemImage: "square.and.arrow.up")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 20)
-                                .padding(.vertical, 14)
-                                .background(AppPalette.accent,
-                                            in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous))
+                            Label("Chia sẻ mã", systemImage: "square.and.arrow.up")
+                                .font(.callout.weight(.semibold))
+                                .padding(.horizontal, 20).padding(.vertical, 14)
                         }
+                        .buttonStyle(.glassProminent)
+                        .tint(AppPalette.accent)
+                        .controlSize(.large)
                     }.padding()
                 }
                 .background(Color(uiColor: .systemGroupedBackground))
-                .navigationTitle("Share Preset")
+                .navigationTitle("Chia sẻ Preset")
                 .toolbar {
-                    Button("Done") { showCode = false }
+                    Button("Xong") { showCode = false }
                         .foregroundStyle(AppPalette.accent)
                 }
             }
@@ -93,19 +95,19 @@ struct CommunityCatalogView: View {
     private var filtersCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "line.3.horizontal.decrease.circle", title: "Filters")
-                Toggle("Compatible with this iOS", isOn: $compatibleOnly)
+                AppCardHeader(icon: "line.3.horizontal.decrease.circle", title: "Bộ lọc")
+                Toggle("Tương thích iOS này", isOn: $compatibleOnly)
                     .tint(AppPalette.accent)
-                Toggle("Favorites only", isOn: $favoritesOnly)
+                Toggle("Chỉ yêu thích", isOn: $favoritesOnly)
                     .tint(AppPalette.accent)
-                if loading { ProgressView("Loading catalog…").tint(AppPalette.accent) }
+                if loading { ProgressView("Đang tải…").tint(AppPalette.accent) }
                 if !message.isEmpty {
-                    Text(message).font(.system(size: 13)).textSelection(.enabled)
+                    Text(message).font(.footnote).textSelection(.enabled)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Link("Community repository and submissions", destination: CommunityCatalog.repositoryURL)
-                    .font(.system(size: 14, weight: .medium))
+                Link("Repo cộng đồng và gửi bài", destination: CommunityCatalog.repositoryURL)
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(AppPalette.accent)
             }
         }
@@ -115,10 +117,11 @@ struct CommunityCatalogView: View {
         let list = filtered.filter { !$0.isTemplate }
         return AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "tray.2.fill", title: "Community Presets (\(list.count))")
+                AppCardHeader(icon: "tray.2.fill",
+                              title: "Preset cộng đồng (\(list.count))")
                 if list.isEmpty {
-                    Text("No presets matching the filters.")
-                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                    Text("Không preset nào khớp bộ lọc.")
+                        .font(.footnote).foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 } else {
                     ForEach(Array(list.enumerated()), id: \.element.key) { idx, entry in
@@ -135,10 +138,10 @@ struct CommunityCatalogView: View {
         return AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(icon: "slider.horizontal.below.rectangle",
-                              title: "Community Templates (\(list.count))")
+                              title: "Mẫu cộng đồng (\(list.count))")
                 if list.isEmpty {
-                    Text("No templates matching the filters.")
-                        .font(.system(size: 13)).foregroundStyle(.secondary)
+                    Text("Không mẫu nào khớp bộ lọc.")
+                        .font(.footnote).foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 } else {
                     ForEach(Array(list.enumerated()), id: \.element.key) { idx, entry in
@@ -153,17 +156,18 @@ struct CommunityCatalogView: View {
     private var shareCodeCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "qrcode", title: "Import Share Code")
-                TextField("Preset name", text: $codeName)
+                AppCardHeader(icon: "qrcode", title: "Nhập mã chia sẻ")
+                TextField("Tên preset", text: $codeName)
                     .textFieldStyle(.roundedBorder)
                 TextField("GN1.…", text: $code, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .textInputAutocapitalization(.never).autocorrectionDisabled()
-                AppButton(title: "Save shared preset", systemImage: "square.and.arrow.down",
+                AppButton(title: "Lưu preset chia sẻ",
+                          systemImage: "square.and.arrow.down",
                           disabled: code.isEmpty) {
                     do {
                         let name = try CommunityCatalog.store(PresetShareCode.decode(code), name: codeName)
-                        message = "Saved \(name). Load it from Presets when ready."
+                        message = "Đã lưu \(name). Tải từ Preset khi sẵn sàng."
                         code = ""; epoch += 1
                     } catch { message = error.localizedDescription }
                 }
@@ -174,8 +178,8 @@ struct CommunityCatalogView: View {
                         Image(systemName: "square.and.arrow.down")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Import .batter or portable preset")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Nhập .batter hoặc preset portable")
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -190,14 +194,15 @@ struct CommunityCatalogView: View {
     private var installedCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "square.stack.3d.up.fill", title: "Installed Template Switches")
+                AppCardHeader(icon: "square.stack.3d.up.fill",
+                              title: "Mẫu đã cài")
                 Button(role: .destructive) {
                     Task {
                         busy = "reset"
                         defer { busy = nil }
                         do {
                             try await GoldenNuggetEngine.shared.resetCommunityTweaks()
-                            message = "Community preferences reset. Reboot the device; other replaced files are listed in the run log."
+                            message = "Đã reset tuỳ chọn cộng đồng. Khởi động lại máy; tệp khác đã thay hiện trong log."
                         } catch { message = error.localizedDescription }
                     }
                 } label: {
@@ -205,8 +210,8 @@ struct CommunityCatalogView: View {
                         Image(systemName: "trash")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.danger)
-                        Text("Reset applied community preferences")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Reset tuỳ chọn cộng đồng")
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(AppPalette.danger)
                         Spacer()
                     }
@@ -219,13 +224,13 @@ struct CommunityCatalogView: View {
                 ForEach(library.templates) { template in
                     DisclosureGroup {
                         VStack(alignment: .leading, spacing: 8) {
-                            Toggle("Include in Apply", isOn: Binding(
+                            Toggle("Bao gồm trong Apply", isOn: Binding(
                                 get: { template.active },
                                 set: { library.setActive($0, template: template.id) }
                             ))
                             .tint(AppPalette.accent)
                             if !template.detail.isEmpty {
-                                Text(template.detail).font(.system(size: 13)).foregroundStyle(.secondary)
+                                Text(template.detail).font(.footnote).foregroundStyle(.secondary)
                             }
                             ForEach(template.tweaks) { tweak in
                                 VStack(alignment: .leading, spacing: 4) {
@@ -239,7 +244,7 @@ struct CommunityCatalogView: View {
                                         Text(tweak.detail).font(.caption).foregroundStyle(.secondary)
                                     }
                                     if let control = tweak.control { controlEditor(control, tweak: tweak, template: template) }
-                                    DisclosureGroup("Files changed") {
+                                    DisclosureGroup("Tệp thay đổi") {
                                         ForEach(Array(Set((tweak.writes + tweak.writesOff).map(\.path))).sorted(), id: \.self) {
                                             Text($0).font(.caption.monospaced()).textSelection(.enabled)
                                         }
@@ -249,15 +254,15 @@ struct CommunityCatalogView: View {
                             Button(role: .destructive) {
                                 do { try library.remove(template) } catch { message = error.localizedDescription }
                             } label: {
-                                Label("Remove template", systemImage: "trash")
-                                    .font(.system(size: 14, weight: .medium))
+                                Label("Xoá mẫu", systemImage: "trash")
+                                    .font(.footnote.weight(.medium))
                                     .foregroundStyle(AppPalette.danger)
                             }
                         }
                         .padding(.vertical, 4)
                     } label: {
                         VStack(alignment: .leading) {
-                            Text(template.title).font(.system(size: 14, weight: .medium))
+                            Text(template.title).font(.footnote.weight(.medium))
                             Text(template.author).font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -271,9 +276,9 @@ struct CommunityCatalogView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Template Errors", tint: AppPalette.danger)
+                              title: "Lỗi mẫu", tint: AppPalette.danger)
                 ForEach(library.loadErrors, id: \.self) { err in
-                    Text(err).font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text(err).font(.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -285,7 +290,7 @@ struct CommunityCatalogView: View {
     private func catalogRow(_ entry: CommunityCatalog.Entry) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack {
-                Text(entry.name).font(.system(size: 15, weight: .semibold))
+                Text(entry.name).font(.footnote.weight(.semibold))
                 Spacer()
                 Button {
                     var ids = favorites
@@ -296,44 +301,43 @@ struct CommunityCatalogView: View {
                         .foregroundStyle(AppPalette.accent)
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("Favorite \(entry.name)")
+                .accessibilityLabel("Yêu thích \(entry.name)")
             }
             Text("\(entry.author) · \(entry.rangeLabel)")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(.secondary)
             if entry.untested {
-                Label("Not tested on a device", systemImage: "exclamationmark.triangle")
-                    .font(.system(size: 12)).foregroundStyle(AppPalette.warning)
+                Label("Chưa test thiết bị", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(AppPalette.warning)
             }
             if !entry.detail.isEmpty {
-                Text(entry.detail).font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(entry.detail).font(.footnote).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !entry.writes.isEmpty {
-                DisclosureGroup("Files changed") {
+                DisclosureGroup("Tệp thay đổi") {
                     ForEach(entry.writes, id: \.self) {
                         Text($0).font(.caption.monospaced()).textSelection(.enabled)
                     }
                 }
-                .font(.system(size: 13))
+                .font(.footnote)
                 .tint(AppPalette.accent)
             }
             let status = CommunityCatalog.status(entry)
             AppButton(title: busy == entry.key
-                      ? "Downloading…"
-                      : (status == "Update available" ? "Update" : "Import"),
+                      ? "Đang tải…"
+                      : (status == "Update available" ? "Cập nhật" : "Nhập"),
                       systemImage: "square.and.arrow.down",
                       running: busy == entry.key,
-                      disabled: busy != nil || !entry.supports(device.current.version) || status == "Installed") {
+                      disabled: busy != nil || !entry.supports(device.current.version) || status == "Installed",
+                      prominent: false) {
                 Task { await install(entry) }
             }
             if let status {
-                Text(status).font(.system(size: 12)).foregroundStyle(.secondary)
+                Text(status).font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)
     }
-
-    // MARK: - Control editor
 
     @ViewBuilder
     private func controlEditor(_ control: CommunityTemplate.Control, tweak: CommunityTemplate.Tweak,
@@ -367,9 +371,9 @@ struct CommunityCatalogView: View {
         do {
             let index = try await CommunityCatalog.fetch()
             entries = index.entries
-            message = "\(entries.count) entries. \(index.rejected) invalid entries skipped."
-                + " \(entries.filter { CommunityCatalog.status($0) == "Update available" }.count) updates available."
-                + (index.cached ? " Showing the offline cache." : "")
+            message = "\(entries.count) mục. \(index.rejected) mục lỗi bỏ qua."
+                + " \(entries.filter { CommunityCatalog.status($0) == "Update available" }.count) bản cập nhật."
+                + (index.cached ? " Đang dùng cache offline." : "")
         } catch { message = error.localizedDescription }
     }
 
@@ -382,13 +386,13 @@ struct CommunityCatalogView: View {
                     .appendingPathComponent("templates/\(entry.id).batter")
                 let data = try await CommunityCatalog.download(url, limit: 25 * 1024 * 1024)
                 guard data.count == entry.size, CommunityCatalog.hash(data) == entry.digest else {
-                    throw CommunityError("Template checksum does not match the catalog.")
+                    throw CommunityError("Checksum mẫu không khớp catalog.")
                 }
                 try library.install(data, id: entry.id)
-                message = "Template installed. Review its switches before Apply."
+                message = "Đã cài mẫu. Xem công tắc trước khi Apply."
             } else {
                 let name = try CommunityCatalog.installPreset(entry)
-                message = "Saved \(name). Load it from Presets when ready."
+                message = "Đã lưu \(name). Tải từ Preset khi sẵn sàng."
             }
             epoch += 1
         } catch { message = error.localizedDescription }
@@ -403,19 +407,19 @@ struct CommunityCatalogView: View {
                   let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil,
                                             options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]),
                   let value = detector.features(in: image).compactMap({ ($0 as? CIQRCodeFeature)?.messageString }).first(where: { $0.contains("GN1.") })
-            else { throw CommunityError("No GoldenNugget QR code found in the image.") }
+            else { throw CommunityError("Không tìm thấy mã QR GoldenNugget trong ảnh.") }
             _ = try PresetShareCode.decode(value)
             code = value
-            message = "QR code read. Choose a name and save the shared preset."
+            message = "Đã đọc mã QR. Đặt tên và lưu preset."
         } else if url.pathExtension.lowercased() == "batter" {
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size <= 25 * 1024 * 1024 else { throw CommunityError("Template exceeds 25 MB.") }
+            guard size <= 25 * 1024 * 1024 else { throw CommunityError("Mẫu vượt 25 MB.") }
             try library.install(Data(contentsOf: url), id: "local-" + UUID().uuidString.lowercased())
-            message = "Template imported."
+            message = "Đã nhập mẫu."
         } else {
             let result = PortablePreset.importFile(url)
             guard result.0 else { throw CommunityError(result.1) }
-            message = "Preset \(result.1) imported."
+            message = "Đã nhập preset \(result.1)."
         }
         epoch += 1
     }
