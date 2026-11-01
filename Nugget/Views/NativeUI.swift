@@ -1,11 +1,7 @@
 import SwiftUI
 import UIKit
 
-// Theme chung. Đã tối ưu cho cuộn mượt:
-// - Card dùng solid color + 1 shadow nhỏ (bỏ material blur + double shadow)
-// - Chip dùng solid tint (bỏ material)
-// - Button 1 shadow nhỏ (bỏ double shadow)
-// - Gradient vẫn giữ ở button để không phẳng, nhưng rất nhẹ.
+// Theme chung. Card dùng solid fill (bỏ material blur — nguồn lag chính).
 
 enum AppPalette {
     static let accent     = Color(red: 0.87, green: 0.44, blue: 0.20)
@@ -23,8 +19,6 @@ enum AppPalette {
     static let sGap:    CGFloat = 10
     static let sScreen: CGFloat = 16
 }
-
-// MARK: - Notes
 
 struct NativeNote: View {
     let text: String
@@ -47,8 +41,6 @@ struct NativeSafetyNote: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 }
-
-// MARK: - Legacy buttons
 
 struct NativePrimaryButton: View {
     let title: String
@@ -117,8 +109,6 @@ struct NativeDangerButton: View {
     }
 }
 
-// MARK: - Collapsible header
-
 struct NativeCollapsibleHeader: View {
     let title: String
     @Binding var collapsed: Bool
@@ -143,8 +133,6 @@ struct NativeCollapsibleHeader: View {
         .buttonStyle(.plain)
     }
 }
-
-// MARK: - Logo
 
 struct NativeLogo: View {
     var size: CGFloat = 72
@@ -176,8 +164,6 @@ struct NativeLogo: View {
     }()
 }
 
-// MARK: - Tone
-
 enum GoldenTone {
     case primary, secondary, disabled, accent, success, error, warning
 }
@@ -195,8 +181,6 @@ extension GoldenTone {
         }
     }
 }
-
-// MARK: - Keyboard
 
 extension View {
     func nativeKeyboardDone() -> some View { modifier(NativeKeyboardDone()) }
@@ -220,11 +204,7 @@ struct NativeKeyboardDone: ViewModifier {
     }
 }
 
-// MARK: - Card
-//
-// Đã bỏ material blur (nguyên nhân chính gây lag cuộn).
-// Solid fill + 1 shadow nhỏ + overlay gradient 3% (rẻ hơn material nhiều).
-
+// Card: solid fill + gradient overlay 3% + 1 shadow nhỏ. Bỏ material.
 struct AppCard<Content: View>: View {
     var padding: CGFloat = AppPalette.sCard
     @ViewBuilder var content: () -> Content
@@ -274,8 +254,6 @@ struct AppCardHeader: View {
     }
 }
 
-// MARK: - Button
-
 struct AppButton: View {
     let title: String
     var systemImage: String? = nil
@@ -315,10 +293,6 @@ struct AppButton: View {
     }
 }
 
-// MARK: - Chip
-//
-// Bỏ material, dùng solid tint. Rẻ hơn nhiều.
-
 struct AppChip: View {
     let text: String
     let tone: GoldenTone
@@ -341,17 +315,9 @@ struct AppChip: View {
     }
 }
 
-// MARK: - Divider
-//
-// Dùng Divider() hệ thống — được tối ưu ở tầng render.
-
 struct AppDivider: View {
-    var body: some View {
-        Divider()
-    }
+    var body: some View { Divider() }
 }
-
-// MARK: - Empty state
 
 struct AppEmptyState: View {
     let icon: String
