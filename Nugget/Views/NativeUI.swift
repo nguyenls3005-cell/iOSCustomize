@@ -1,61 +1,64 @@
 import SwiftUI
 import UIKit
 
-// Shared building blocks for the native screens.
-//
-// The page-level components are deliberately plain: a solid card, a flat
-// button, a small chip. No gradients, no materials beyond what a card needs to
-// sit on the grouped background, no animation. The look differs from the old
-// `List(.insetGrouped)` layout because it is a stack of cards, not because it
-// is decorated.
+// Shared theme + components. Every page in the app draws from these, so a
+// change here reaches the whole app. Corner radii follow the iOS 26 softer
+// look: 28 pt cards, 20 pt buttons, larger gutters throughout. The palette is
+// a single deep-orange accent (EnsWilde family), not the system blue, so
+// every filled action is unambiguously this app's.
 
 // MARK: - Palette
-//
-// The one accent the app paints with. A deep orange — the same family as
-// EnsWilde's — instead of the system blue, so a filled action is unambiguous
-// in a screenshot. Two depths: the fill, and a slightly darker one for the
-// bottom of any gradient that needs one.
 
 enum AppPalette {
-    /// The primary accent. Deep orange, ~#FF6B0D.
+    /// Primary accent — deep orange, ~#FF6B0D.
     static let accent     = Color(red: 1.00, green: 0.42, blue: 0.05)
-    /// A darker shade for gradient ends and pressed states.
+    /// Darker shade, for gradient ends and pressed states.
     static let accentDeep = Color(red: 0.88, green: 0.31, blue: 0.02)
+    static let danger     = Color(red: 1.00, green: 0.30, blue: 0.26)
+    static let success    = Color(red: 0.20, green: 0.78, blue: 0.36)
+    static let warning    = Color(red: 1.00, green: 0.58, blue: 0.00)
+
+    // Radii — iOS 26 (large, continuous)
+    static let rCard:   CGFloat = 28
+    static let rInner:  CGFloat = 20
+    static let rButton: CGFloat = 20
+    static let rTile:   CGFloat = 22
+    static let rSmall:  CGFloat = 14
+
+    // Spacing
+    static let sCard:   CGFloat = 20
+    static let sGap:    CGFloat = 14
+    static let sScreen: CGFloat = 16
 }
 
 // MARK: - Notes
 
-/// A muted explanatory line: secondary, footnote, wraps rather than truncates.
 struct NativeNote: View {
     let text: String
     init(_ text: String) { self.text = text }
-
     var body: some View {
         Text(text)
-            .font(.footnote)
+            .font(.system(size: 13, weight: .regular))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-/// A line that says what an action costs, in the system danger tone.
 struct NativeSafetyNote: View {
     let text: String
     init(_ text: String) { self.text = text }
-
     var body: some View {
         Text(text)
-            .font(.footnote)
-            .foregroundStyle(.red)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(AppPalette.danger)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-// MARK: - Legacy primary/danger buttons
+// MARK: - Legacy buttons
 //
-// Kept for every page that already uses them (FirstRunView, ResetPagesSheet,
-// PresetManagerView, ...). The HomeView has moved to `AppButton` below, but
-// nothing here is removed so no other screen breaks.
+// Names and signatures preserved so no existing page breaks. Style replaced
+// with the new flat accent fill and the new radii.
 
 struct NativePrimaryButton: View {
     let title: String
@@ -66,19 +69,24 @@ struct NativePrimaryButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 if running {
-                    ProgressView().controlSize(.small)
+                    ProgressView().controlSize(.small).tint(.white)
                 } else if let systemImage {
                     Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
                 }
-                Text(title).font(.headline)
+                Text(title).font(.system(size: 16, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .foregroundStyle(.white)
+            .background(
+                AppPalette.accent.opacity(disabled ? 0.4 : 1),
+                in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
+            )
         }
-        .buttonStyle(.glassProminent)
-        .controlSize(.large)
-        .tint(AppPalette.accent)
+        .buttonStyle(.plain)
         .disabled(running || disabled)
     }
 }
@@ -91,15 +99,22 @@ struct NativeDangerButton: View {
 
     var body: some View {
         Button(role: .destructive, action: action) {
-            HStack(spacing: 8) {
-                if let systemImage { Image(systemName: systemImage) }
-                Text(title).font(.headline)
+            HStack(spacing: 10) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                Text(title).font(.system(size: 16, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
+            .padding(.vertical, 15)
+            .foregroundStyle(.white)
+            .background(
+                AppPalette.danger.opacity(disabled ? 0.4 : 1),
+                in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
+            )
         }
-        .buttonStyle(.borderedProminent)
-        .controlSize(.large)
-        .tint(.red)
+        .buttonStyle(.plain)
         .disabled(disabled)
     }
 }
@@ -116,9 +131,12 @@ struct NativeCollapsibleHeader: View {
         } label: {
             HStack(spacing: 6) {
                 Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .textCase(.uppercase)
+                    .tracking(1.1)
                 Spacer(minLength: 0)
                 Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 11, weight: .bold))
             }
             .foregroundStyle(.secondary)
             .contentShape(Rectangle())
@@ -135,11 +153,9 @@ struct NativeLogo: View {
     var body: some View {
         Group {
             if let image = NativeLogo.bundledIcon {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                Image(uiImage: image).resizable().scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
                     .fill(.thinMaterial)
                     .overlay(
                         Image(systemName: "shippingbox.fill")
@@ -149,7 +165,7 @@ struct NativeLogo: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.28, style: .continuous))
     }
 
     private static let bundledIcon: UIImage? = {
@@ -170,13 +186,13 @@ enum GoldenTone {
 extension GoldenTone {
     var nativeColor: Color {
         switch self {
-        case .primary: return .primary
+        case .primary:   return .primary
         case .secondary: return .secondary
-        case .disabled: return Color(.tertiaryLabel)
-        case .accent: return AppPalette.accent
-        case .success: return .green
-        case .error: return .red
-        case .warning: return .orange
+        case .disabled:  return Color(.tertiaryLabel)
+        case .accent:    return AppPalette.accent
+        case .success:   return AppPalette.success
+        case .error:     return AppPalette.danger
+        case .warning:   return AppPalette.warning
         }
     }
 }
@@ -203,14 +219,10 @@ struct NativeKeyboardDone: ViewModifier {
     }
 }
 
-// MARK: - Card surface
-//
-// The one container the redesigned HomeView puts every section in. A rounded
-// rectangle on `secondarySystemGroupedBackground`, a thin border, and no
-// shadow — a card, not a floating tile.
+// MARK: - Card
 
 struct AppCard<Content: View>: View {
-    var padding: CGFloat = 16
+    var padding: CGFloat = AppPalette.sCard
     @ViewBuilder var content: () -> Content
 
     var body: some View {
@@ -219,17 +231,17 @@ struct AppCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 Color(uiColor: .secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                in: RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: AppPalette.rCard, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
             )
     }
 }
 
-/// The card header: a small icon and a section title, in one line. Used on
-/// every card so the page reads as a set of sections, not as a wall of rows.
+// MARK: - Card header
+
 struct AppCardHeader: View {
     let icon: String
     let title: String
@@ -237,29 +249,21 @@ struct AppCardHeader: View {
     var trailing: AnyView? = nil
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(tint)
-            Text(title)
-                .font(.system(size: 15, weight: .semibold))
-            Spacer()
-            if let trailing {
-                trailing
-            }
+                .frame(width: 26, height: 26)
+                .background(tint.opacity(0.14),
+                            in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            Text(title).font(.system(size: 15, weight: .semibold))
+            Spacer(minLength: 6)
+            if let trailing { trailing }
         }
     }
 }
 
 // MARK: - Button
-//
-// A flat filled button: rounded rectangle, white text on the accent (or red)
-// fill. This is the HomeView's action primitive. It has no ring, no gradient,
-// no shadow — just a colour change and a corner radius.
-//
-// Argument order is fixed: title, systemImage, running, disabled, destructive,
-// action. `disabled` must precede `destructive`; calling `AppButton(title:,
-// systemImage:, destructive:, disabled:)` will not compile.
 
 struct AppButton: View {
     let title: String
@@ -273,23 +277,20 @@ struct AppButton: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 if running {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.white)
+                    ProgressView().controlSize(.small).tint(.white)
                 } else if let systemImage {
                     Image(systemName: systemImage)
                         .font(.system(size: 15, weight: .semibold))
                 }
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
+                Text(title).font(.system(size: 16, weight: .semibold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, 15)
             .foregroundStyle(.white)
             .background(
-                (destructive ? Color.red : AppPalette.accent)
+                (destructive ? AppPalette.danger : AppPalette.accent)
                     .opacity(disabled ? 0.4 : 1),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous)
             )
         }
         .buttonStyle(.plain)
@@ -298,9 +299,6 @@ struct AppButton: View {
 }
 
 // MARK: - Chip
-//
-// A small status label: an optional glyph and a short phrase on a tinted
-// capsule. Replaces a whole List row that used to hold one sentence.
 
 struct AppChip: View {
     let text: String
@@ -308,7 +306,7 @@ struct AppChip: View {
     var systemImage: String? = nil
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             if let systemImage {
                 Image(systemName: systemImage)
                     .font(.system(size: 10, weight: .bold))
@@ -317,9 +315,48 @@ struct AppChip: View {
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .foregroundStyle(tone.nativeColor)
         .background(tone.nativeColor.opacity(0.13), in: Capsule())
+    }
+}
+
+// MARK: - Divider
+
+struct AppDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.06))
+            .frame(height: 0.5)
+    }
+}
+
+// MARK: - Empty state
+
+struct AppEmptyState: View {
+    let icon: String
+    let title: String
+    var message: String? = nil
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(AppPalette.accent.opacity(0.7))
+            Text(title)
+                .font(.system(size: 16, weight: .semibold))
+                .multilineTextAlignment(.center)
+            if let message {
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 32)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
     }
 }
