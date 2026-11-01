@@ -70,7 +70,6 @@ struct HomeView: View {
                     heroCard
                     metricRow
                     applyCard
-                    quickActionsCard
                     if !status.isEmpty { statusCard }
                     connectionCard
                     mediaCard
@@ -255,20 +254,14 @@ struct HomeView: View {
 
                 if running {
                     progressRow
-                    Button {
+                    AppButton(
+                        title: "Dừng chạy",
+                        systemImage: "stop.fill",
+                        destructive: true,
+                        prominent: false
+                    ) {
                         GoldenNuggetEngine.shared.requestCancel()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "stop.fill")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Dừng chạy")
-                                .font(.callout.weight(.semibold))
-                        }
-                        .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(AppPalette.danger)
-                    .controlSize(.large)
                 }
                 NativeNote(applyNote)
             }
@@ -290,41 +283,6 @@ struct HomeView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
-    }
-
-    // MARK: - Quick actions
-
-    private var quickActionsCard: some View {
-        AppCard {
-            VStack(alignment: .leading, spacing: 12) {
-                AppCardHeader(icon: "square.grid.2x2.fill", title: "Truy cập nhanh")
-                HStack(spacing: 10) {
-                    quickTile(icon: "slider.horizontal.3", label: "Tinh chỉnh", dest: .tweaks)
-                    quickTile(icon: "gearshape.2.fill", label: "Daemons", dest: .daemons)
-                    quickTile(icon: "photo.artframe", label: "Hình nền", dest: .posterBoard)
-                    quickTile(icon: "antenna.radiowaves.left.and.right", label: "Status", dest: .statusBar)
-                }
-            }
-        }
-    }
-
-    private func quickTile(icon: String, label: String, dest: AppDestination) -> some View {
-        Button {
-            openDestination(dest)
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
-                Text(label)
-                    .font(.caption2.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-        }
-        .buttonStyle(.glass)
-        .tint(AppPalette.accent)
-        .controlSize(.regular)
     }
 
     // MARK: - Connection
