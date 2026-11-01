@@ -12,43 +12,43 @@ struct StatusBarView: View {
         StatusBarMechanism.mechanism(for: deviceMonitor.current.version)
     }
 
-    private func edited() {
-        selection.saveToDisk()
-    }
+    private func edited() { selection.saveToDisk() }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                enableCard
-                if mechanism == .archive { archiveNoteCard }
-                textCard
-                levelsCard
-                if mechanism == .classic {
-                    rawCard
-                    itemsCard
-                    extrasCard
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    enableCard
+                    if mechanism == .archive { archiveNoteCard }
+                    textCard
+                    levelsCard
+                    if mechanism == .classic {
+                        rawCard
+                        itemsCard
+                        extrasCard
+                    }
+                    deliveryCard
                 }
-                deliveryCard
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .tint(AppPalette.accent)
         .navigationTitle("Status Bar")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showSignalChoice) {
             NavigationStack {
                 Form {
-                    Stepper("Cellular signal bars: \(firstSignalBars)",
-                            value: $firstSignalBars, in: 0...5)
+                    Stepper("Số vạch sóng: \(firstSignalBars)", value: $firstSignalBars, in: 0...5)
                 }
-                .navigationTitle("Choose cellular signal bars")
+                .navigationTitle("Chọn số vạch sóng")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showSignalChoice = false }
+                        Button("Huỷ") { showSignalChoice = false }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
+                        Button("Xong") {
                             selection.overrides.signalBars.set = true
                             selection.overrides.signalBars.value = firstSignalBars
                             selection.enabled = true
@@ -61,12 +61,8 @@ struct StatusBarView: View {
             }
             .tint(AppPalette.accent)
         }
-        .task {
-            selection.loadFromDisk()
-        }
+        .task { selection.loadFromDisk() }
     }
-
-    // MARK: - Enable
 
     private var enableCard: some View {
         AppCard {
@@ -80,15 +76,13 @@ struct StatusBarView: View {
                         selection.enabled = enabled
                     }
                 })) {
-                    Text("Enable Status Bar Modifications")
-                        .font(.system(size: 15, weight: .medium))
+                    Text("Bật sửa Status Bar").font(.subheadline.weight(.medium))
                 }
                 .tint(AppPalette.accent)
                 .onChange(of: selection.enabled) { _, _ in edited() }
-
                 NativeNote(mechanism == .archive
-                    ? "This writes \(StatusBarMechanism.archive.restorePath) in \(StatusBarMechanism.archive.domain)."
-                    : "This writes \(StatusBarMechanism.classic.restorePath) in \(StatusBarMechanism.classic.domain).")
+                    ? "Ghi vào \(StatusBarMechanism.archive.restorePath) trong \(StatusBarMechanism.archive.domain)."
+                    : "Ghi vào \(StatusBarMechanism.classic.restorePath) trong \(StatusBarMechanism.classic.domain).")
             }
         }
     }
@@ -96,8 +90,8 @@ struct StatusBarView: View {
     private var archiveNoteCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
-                AppCardHeader(icon: "info.circle", title: "iOS 27 mode")
-                NativeNote("iOS 27 replaced the status bar override file, so only the carrier entry can be changed here: its name, its service badge, signal bars and network type. The badge and the bars apply to the carrier name, so set one first. Signal bars are omitted unless explicitly set. Network type is a fixed visual badge and does not change the connection. Set a carrier name for each SIM; without a network selection its badge is hidden. The other options need iOS 26 or lower.")
+                AppCardHeader(icon: "info.circle", title: "Chế độ iOS 27")
+                NativeNote("iOS 27 thay tệp status bar override, nên chỉ sửa được entry carrier: tên, badge dịch vụ, số vạch sóng và loại mạng. Badge và vạch sóng áp dụng cho tên carrier — đặt tên trước. Vạch sóng bỏ qua nếu không đặt rõ. Loại mạng là badge cố định, không đổi kết nối. Đặt tên carrier cho từng SIM; không có chọn mạng thì badge ẩn. Các tuỳ chọn khác cần iOS 26 trở xuống.")
             }
         }
     }
@@ -107,22 +101,22 @@ struct StatusBarView: View {
     private var textCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "textformat", title: "Text")
-                textFieldRow(.carrierName, "Carrier Name", survivesArchive: true)
+                AppCardHeader(icon: "textformat", title: "Văn bản")
+                textFieldRow(.carrierName, "Tên nhà mạng", survivesArchive: true)
                 AppDivider()
-                textFieldRow(.serviceBadge, "Service Badge", survivesArchive: true)
+                textFieldRow(.serviceBadge, "Badge dịch vụ", survivesArchive: true)
                 AppDivider()
-                textFieldRow(.secondaryCarrierName, "Secondary Carrier Name", survivesArchive: true)
+                textFieldRow(.secondaryCarrierName, "Tên nhà mạng phụ", survivesArchive: true)
                 AppDivider()
-                textFieldRow(.secondaryServiceBadge, "Secondary Service Badge", survivesArchive: true)
+                textFieldRow(.secondaryServiceBadge, "Badge dịch vụ phụ", survivesArchive: true)
                 AppDivider()
-                textFieldRow(.timeText, "Time Text", survivesArchive: false)
+                textFieldRow(.timeText, "Chữ thời gian", survivesArchive: false)
                 AppDivider()
-                textFieldRow(.dateText, "Date Text", survivesArchive: false)
+                textFieldRow(.dateText, "Chữ ngày", survivesArchive: false)
                 AppDivider()
-                textFieldRow(.breadcrumb, "Breadcrumb Text", survivesArchive: false)
+                textFieldRow(.breadcrumb, "Chữ breadcrumb", survivesArchive: false)
                 AppDivider()
-                textFieldRow(.batteryDetail, "Battery Detail Text", survivesArchive: false)
+                textFieldRow(.batteryDetail, "Chữ chi tiết pin", survivesArchive: false)
             }
         }
     }
@@ -132,20 +126,20 @@ struct StatusBarView: View {
     private var levelsCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "chart.bar.fill", title: "Levels")
-                levelRow(.signalBars, "Cellular Signal Bars", range: 0...5, survivesArchive: true)
+                AppCardHeader(icon: "chart.bar.fill", title: "Mức")
+                levelRow(.signalBars, "Vạch sóng di động", range: 0...5, survivesArchive: true)
                 AppDivider()
-                levelRow(.secondarySignalBars, "Secondary Cellular Signal Bars",
+                levelRow(.secondarySignalBars, "Vạch sóng di động phụ",
                          range: 0...5, survivesArchive: true)
                 AppDivider()
-                levelRow(.wifiBars, "Wi-Fi Signal Bars", range: 0...5, survivesArchive: false)
+                levelRow(.wifiBars, "Vạch sóng Wi-Fi", range: 0...5, survivesArchive: false)
                 AppDivider()
-                levelRow(.batteryCapacity, "Battery Icon Capacity",
+                levelRow(.batteryCapacity, "Dung lượng icon pin",
                          range: 0...100, survivesArchive: false)
                 AppDivider()
-                networkRow(.dataNetworkType, "Data Network Type")
+                networkRow(.dataNetworkType, "Loại mạng dữ liệu")
                 AppDivider()
-                networkRow(.secondaryDataNetworkType, "Secondary Data Network Type")
+                networkRow(.secondaryDataNetworkType, "Loại mạng dữ liệu phụ")
             }
         }
     }
@@ -155,17 +149,15 @@ struct StatusBarView: View {
     private var rawCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "waveform.path", title: "Raw Signal Strength")
+                AppCardHeader(icon: "waveform.path", title: "Cường độ sóng thô")
                 Toggle(isOn: $selection.overrides.rawSignalShown) {
-                    Text("Show Numeric Cellular Strength")
-                        .font(.system(size: 15, weight: .medium))
+                    Text("Hiện số cường độ di động").font(.subheadline.weight(.medium))
                 }
                 .tint(AppPalette.accent)
                 .onChange(of: selection.overrides.rawSignalShown) { _, _ in edited() }
                 AppDivider()
                 Toggle(isOn: $selection.overrides.rawWifiSignalShown) {
-                    Text("Show Numeric Wi-Fi Strength")
-                        .font(.system(size: 15, weight: .medium))
+                    Text("Hiện số cường độ Wi-Fi").font(.subheadline.weight(.medium))
                 }
                 .tint(AppPalette.accent)
                 .onChange(of: selection.overrides.rawWifiSignalShown) { _, _ in edited() }
@@ -178,11 +170,11 @@ struct StatusBarView: View {
     private var itemsCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
-                AppCardHeader(icon: "eye.slash", title: "Items")
+                AppCardHeader(icon: "eye.slash", title: "Icon")
                 ForEach(Array(Self.itemRows.enumerated()), id: \.element.0) { idx, pair in
                     let (item, title) = pair
                     Toggle(isOn: itemHidden(item)) {
-                        Text(title).font(.system(size: 14, weight: .medium))
+                        Text(title).font(.footnote.weight(.medium))
                     }
                     .tint(AppPalette.accent)
                     if idx < Self.itemRows.count - 1 { AppDivider() }
@@ -192,20 +184,20 @@ struct StatusBarView: View {
     }
 
     private static let itemRows: [(StatusBarItem, String)] = [
-        (.quietMode, "Disable Focus Mode icon"),
-        (.airplaneMode, "Disable Airplane Mode icon"),
-        (.cellularService, "Disable Cellular Service icon"),
-        (.cellularDataNetwork, "Disable Wi-Fi icon"),
-        (.mainBattery, "Disable Battery icon"),
-        (.bluetooth, "Disable Bluetooth icon"),
-        (.alarm, "Disable Alarm icon"),
-        (.location, "Disable Location icon"),
-        (.rotationLock, "Disable Rotation Lock icon"),
-        (.airPlay, "Disable AirPlay icon"),
-        (.carPlay, "Disable CarPlay icon"),
-        (.vpn, "Disable VPN icon"),
-        (.voiceControl, "Disable Voice Control icon"),
-        (.liquidDetection, "Disable Liquid Detection Warning icon")
+        (.quietMode, "Ẩn icon Focus"),
+        (.airplaneMode, "Ẩn icon Máy bay"),
+        (.cellularService, "Ẩn icon Sóng di động"),
+        (.cellularDataNetwork, "Ẩn icon Wi-Fi"),
+        (.mainBattery, "Ẩn icon Pin"),
+        (.bluetooth, "Ẩn icon Bluetooth"),
+        (.alarm, "Ẩn icon Báo thức"),
+        (.location, "Ẩn icon Vị trí"),
+        (.rotationLock, "Ẩn icon Khoá xoay"),
+        (.airPlay, "Ẩn icon AirPlay"),
+        (.carPlay, "Ẩn icon CarPlay"),
+        (.vpn, "Ẩn icon VPN"),
+        (.voiceControl, "Ẩn icon Điều khiển giọng nói"),
+        (.liquidDetection, "Ẩn icon Cảnh báo nước")
     ]
 
     private func isItemHidden(_ item: StatusBarItem) -> Bool {
@@ -226,14 +218,13 @@ struct StatusBarView: View {
     private var extrasCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "wand.and.stars", title: "Extras")
+                AppCardHeader(icon: "wand.and.stars", title: "Thêm")
                 Toggle(isOn: $selection.sillyMode) {
-                    Text("Silly Mode (every item on)")
-                        .font(.system(size: 15, weight: .medium))
+                    Text("Silly Mode (bật mọi icon)").font(.subheadline.weight(.medium))
                 }
                 .tint(AppPalette.accent)
                 .onChange(of: selection.sillyMode) { _, _ in edited() }
-                NativeNote("Silly Mode forces every status-bar item on, over anything set above it. Turning it off restores exactly what you had.")
+                NativeNote("Silly Mode buộc mọi icon status bar bật, đè mọi thứ trên. Tắt sẽ khôi phục đúng những gì bạn đã đặt.")
             }
         }
     }
@@ -243,14 +234,14 @@ struct StatusBarView: View {
     private var deliveryCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 6) {
-                AppCardHeader(icon: "paperplane", title: "Delivery", tint: AppPalette.success)
-                Text(selection.enabled ? "Ready to apply" : "Not applying")
-                    .font(.system(size: 15, weight: .semibold))
+                AppCardHeader(icon: "paperplane", title: "Phân phối", tint: AppPalette.success)
+                Text(selection.enabled ? "Sẵn sàng áp dụng" : "Không áp dụng")
+                    .font(.subheadline.weight(.semibold))
                 NativeNote(selection.enabled
-                    ? "\(selection.overrides.activeCount) override(s) → "
-                        + "\(mechanism == .archive ? "the iOS 27 archive" : "the classic struct"), "
-                        + "written on the next Apply."
-                    : "Nothing is written on Apply until this is on.")
+                    ? "\(selection.overrides.activeCount) override → "
+                        + "\(mechanism == .archive ? "archive iOS 27" : "struct cổ điển"), "
+                        + "ghi vào lượt Apply tiếp theo."
+                    : "Không có gì ghi vào Apply cho đến khi bật.")
             }
         }
     }
@@ -266,11 +257,11 @@ struct StatusBarView: View {
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 Toggle(isOn: overrideSwitch(for: key)) {
-                    Text(title).font(.system(size: 14, weight: .medium))
+                    Text(title).font(.footnote.weight(.medium))
                 }
                 .tint(AppPalette.accent)
                 .onChange(of: field.set) { _, _ in edited() }
-                TextField("(empty = clear)", text: textBinding(for: key))
+                TextField("(trống = xoá)", text: textBinding(for: key))
                     .textFieldStyle(.roundedBorder)
                     .disabled(!field.set)
             }
@@ -290,10 +281,10 @@ struct StatusBarView: View {
                     selection.overrides.set(field, for: key)
                     edited()
                 })) {
-                Text(title).font(.system(size: 14, weight: .medium))
+                Text(title).font(.footnote.weight(.medium))
             }
             .tint(AppPalette.accent)
-            Picker("Fixed network badge", selection: levelBinding(for: key)) {
+            Picker("Badge mạng cố định", selection: levelBinding(for: key)) {
                 ForEach(Array(Set(names.keys).union([current])).sorted(), id: \.self) { value in
                     Text(names[value] ?? String(value)).tag(value)
                 }
@@ -319,10 +310,10 @@ struct StatusBarView: View {
                         edited()
                     })) {
                     HStack {
-                        Text(title).font(.system(size: 14, weight: .medium))
+                        Text(title).font(.footnote.weight(.medium))
                         Spacer()
-                        Text(field.set ? "\(field.value)" : "Default")
-                            .font(.system(size: 13))
+                        Text(field.set ? "\(field.value)" : "Mặc định")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
