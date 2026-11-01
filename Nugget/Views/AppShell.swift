@@ -12,11 +12,11 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .home: "Home"
-        case .tweaks: "Tweaks"
+        case .home: "Trang chủ"
+        case .tweaks: "Tinh chỉnh"
         case .daemons: "Daemons"
         case .statusBar: "Status Bar"
-        case .more: "More"
+        case .more: "Thêm"
         }
     }
 
@@ -77,23 +77,22 @@ enum AppDestination: String, CaseIterable, Identifiable, Hashable {
     }
 
     var showsInSidebar: Bool { self != .home && self != .wallpaperDownloads }
-    var isInMoreMenu: Bool { tab == nil && showsInSidebar }
 
     var title: String {
         switch self {
         case .home: "iOSCustomize"
-        case .tweaks: "Tweaks"
+        case .tweaks: "Tinh chỉnh"
         case .daemons: "Daemons"
         case .statusBar: "Status Bar"
-        case .presets: "Presets"
-        case .templates: "Templates"
-        case .posterBoard: "Wallpapers"
-        case .wallpaperDownloads: "Download Wallpapers"
-        case .wallet: "Wallet"
-        case .passcode: "Passcode"
-        case .media: "Media"
-        case .files: "Files"
-        case .settings: "Settings"
+        case .presets: "Preset"
+        case .templates: "Mẫu"
+        case .posterBoard: "Hình nền"
+        case .wallpaperDownloads: "Tải hình nền"
+        case .wallet: "Ví"
+        case .passcode: "Mật mã"
+        case .media: "Phương tiện"
+        case .files: "Tệp"
+        case .settings: "Cài đặt"
         }
     }
 
@@ -241,9 +240,9 @@ struct RootView: View {
     @ViewBuilder
     private func page(for destination: AppDestination) -> some View {
         if !destination.allowed(by: hotload.currentPolicy) {
-            ContentUnavailableView("Feature unavailable",
+            ContentUnavailableView("Không khả dụng",
                                    systemImage: "exclamationmark.triangle",
-                                   description: Text("This feature is hidden by HotLoad safety rules."))
+                                   description: Text("Tính năng này bị ẩn bởi HotLoad safety rules."))
         } else {
             switch destination {
             case .home: EmptyView()
@@ -288,54 +287,55 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - More (tab)
+// MARK: - More
 
 private struct MoreView: View {
     @ObservedObject private var hotload = HotLoadService.shared
     @ObservedObject private var device = DeviceIdentityMonitor.shared
 
     private static let sections: [(title: String, pages: [AppDestination])] = [
-        ("Library", [.presets, .templates]),
-        ("Personalize", [.posterBoard, .wallet, .passcode]),
-        ("Device", [.media, .files]),
-        ("App", [.settings]),
+        ("Thư viện", [.presets, .templates]),
+        ("Cá nhân hoá", [.posterBoard, .wallet, .passcode]),
+        ("Thiết bị", [.media, .files]),
+        ("Ứng dụng", [.settings]),
     ]
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                ForEach(Self.sections, id: \.title) { section in
-                    let pages = section.pages.filter {
-                        $0.isAvailable(policy: hotload.currentPolicy, device: device.current)
-                    }
-                    if !pages.isEmpty {
-                        AppCard {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(section.title.uppercased())
-                                    .font(.system(size: 11, weight: .bold))
-                                    .tracking(1.2)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 4)
-                                    .padding(.bottom, 4)
-                                ForEach(Array(pages.enumerated()), id: \.element) { idx, destination in
-                                    NavigationLink(value: destination) {
-                                        MoreRow(destination: destination)
-                                    }
-                                    .buttonStyle(.plain)
-                                    if idx < pages.count - 1 {
-                                        AppDivider().padding(.leading, 46)
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    ForEach(Self.sections, id: \.title) { section in
+                        let pages = section.pages.filter {
+                            $0.isAvailable(policy: hotload.currentPolicy, device: device.current)
+                        }
+                        if !pages.isEmpty {
+                            AppCard {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(section.title.uppercased())
+                                        .font(.footnote.weight(.bold))
+                                        .tracking(0.8)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.bottom, 4)
+                                    ForEach(Array(pages.enumerated()), id: \.element) { idx, destination in
+                                        NavigationLink(value: destination) {
+                                            MoreRow(destination: destination)
+                                        }
+                                        .buttonStyle(.plain)
+                                        if idx < pages.count - 1 {
+                                            AppDivider().padding(.leading, 46)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("More")
+        .navigationTitle("Thêm")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -349,10 +349,12 @@ private struct MoreRow: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppPalette.accent)
                 .frame(width: 32, height: 32)
-                .background(AppPalette.accent.opacity(0.12),
-                            in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(AppPalette.accent.opacity(0.15))
+                )
             Text(destination.title)
-                .font(.system(size: 15, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(.primary)
             Spacer()
             Image(systemName: "chevron.right")
@@ -374,7 +376,7 @@ private struct AppDestinationList: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 4) {
+            LazyVStack(spacing: 4) {
                 ForEach(AppDestination.allCases.filter { destination in
                     destination.showsInSidebar
                         && destination.isAvailable(policy: hotload.currentPolicy, device: device.current)
@@ -402,20 +404,20 @@ private struct AppDestinationList: View {
                 .foregroundStyle(selected ? AppPalette.accent : Color.secondary)
                 .frame(width: 30, height: 30)
                 .background(
-                    (selected ? AppPalette.accent : Color.secondary)
-                        .opacity(selected ? 0.15 : 0.08),
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill((selected ? AppPalette.accent : Color.secondary)
+                            .opacity(selected ? 0.15 : 0.08))
                 )
             Text(destination.title)
-                .font(.system(size: 14, weight: selected ? .semibold : .medium))
+                .font(.subheadline.weight(selected ? .bold : .medium))
                 .foregroundStyle(.primary)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(
-            AppPalette.accent.opacity(selected ? 0.10 : 0),
-            in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous)
+            RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous)
+                .fill(AppPalette.accent.opacity(selected ? 0.12 : 0))
         )
         .contentShape(Rectangle())
     }
