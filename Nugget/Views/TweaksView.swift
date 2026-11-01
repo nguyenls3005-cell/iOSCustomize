@@ -20,26 +20,37 @@ struct TweaksView: View {
     @State private var collapsedSections: Set<TweakSection> = []
     @State private var foldedByHand: Set<TweakSection> = []
     @State private var searchText = ""
-
     @State private var autosaveTask: Task<Void, Never>?
 
+    // Cache — recompute only on filter change
+    @State private var cachedSpecs: [TweakSpec] = []
+    @State private var cachedSections: [CachedSection] = []
+
+    struct CachedSection: Identifiable {
+        let section: TweakSection
+        let specs: [TweakSpec]
+        var id: TweakSection { section }
+    }
+
     var body: some View {
-        let specs = visibleSpecs
-        ScrollView {
-            LazyVStack(spacing: AppPalette.sGap) {
-                identityCard(specs: specs)
-                importCard
-                templatesLinkCard
-                if searchActive && specs.isEmpty { emptySearchCard }
-                tweakCards(specs: specs)
-                if let importReport { reportCard(importReport) }
-                if let importError { errorCard(importError) }
-                if !tail.isEmpty { logCard }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    identityCard
+                    importCard
+                    templatesLinkCard
+                    if searchActive && cachedSections.isEmpty { emptySearchCard }
+                    sectionCards
+                    if let importReport { reportCard(importReport) }
+                    if let importError { errorCard(importError) }
+                    if !tail.isEmpty { logCard }
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 10)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .tint(AppPalette.accent)
         .navigationTitle("Tinh chỉnh")
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
@@ -49,18 +60,24 @@ struct TweaksView: View {
             await deviceMonitor.refresh()
             restoreAutosave()
             offerUntestedTweaks()
+            rebuildCache()
         }
-        .onChange(of: identity.version) { _, _ in offerUntestedTweaks() }
-        .onChange(of: untestedTweaks) { _, _ in formEpoch += 1 }
+        .onChange(of: identity.version) { _, _ in
+            offerUntestedTweaks()
+            rebuildCache()
+        }
+        .onChange(of: untestedTweaks) { _, _ in
+            formEpoch += 1
+            rebuildCache()
+        }
+        .onChange(of: searchText) { _, _ in rebuildCache() }
         .onChange(of: selection) { _, _ in scheduleAutosave() }
         .alert("Không phải toàn bộ tinh chỉnh", isPresented: $showUntestedChoice) {
             Button("Bật tinh chỉnh không tương thích") {
                 untestedTweaks = true
                 untestedChoiceDone = true
             }
-            Button("Không", role: .cancel) {
-                untestedChoiceDone = true
-            }
+            Button("Không", role: .cancel) { untestedChoiceDone = true }
         } message: {
             Text("Bạn có thể mở thêm tinh chỉnh, nhưng chúng chưa được kiểm tra với phiên bản iOS của bạn.")
         }
@@ -73,29 +90,56 @@ struct TweaksView: View {
         }
     }
 
+    // MARK: - Cache
+
+    private func rebuildCache() {
+        let hidden = hotload.currentPolicy.hiddenTweakIDs
+        let query = searchText
+        let device = identity
+
+        let visible = TweakCatalog.all.filter {
+            $0.section != .daemons
+                && !hidden.contains($0.id)
+                && $0.isCompatible(deviceVersion: device.version,
+                                   isIPhone: device.isIPhone,
+                                   deviceModel: device.productType)
+                && searchMatches(query: query, $0.title, $0.detail ?? "", $0.id)
+        }
+        cachedSpecs = visible
+        cachedSections = TweakSection.allCases
+            .filter { $0 != .daemons }
+            .compactMap { section in
+                let specs = visible.filter { $0.section == section }
+                return specs.isEmpty ? nil : CachedSection(section: section, specs: specs)
+            }
+    }
+
     private func offerUntestedTweaks() {
         if UntestedTweaks.isIOS26(identity.version) && !untestedTweaks && !untestedChoiceDone {
             showUntestedChoice = true
         }
     }
 
-    private func collapsedBinding(for section: TweakSection, specs: [TweakSpec]) -> Binding<Bool> {
-        Binding(
-            get: {
-                if foldedByHand.contains(section) { return collapsedSections.contains(section) }
-                return !specs.contains { selection.isOn($0) }
-            },
-            set: { collapsed in
-                foldedByHand.insert(section)
-                if collapsed { collapsedSections.insert(section) } else { collapsedSections.remove(section) }
-            })
-    }
+    // MARK: - Cards
 
-    private func identityCard(specs: [TweakSpec]) -> some View {
+    private var identityCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(identity.describe).font(.subheadline.weight(.semibold))
-                NativeNote("\(selection.enabledCount) / \(specs.count) tinh chỉnh đang bật.")
+            HStack(spacing: 12) {
+                Image(systemName: "iphone.gen3")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(AppPalette.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(AppPalette.accent.opacity(0.15))
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(identity.describe).font(.subheadline.weight(.semibold))
+                    Text("\(selection.enabledCount) / \(cachedSpecs.count) tinh chỉnh đang bật")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
             }
         }
     }
@@ -106,7 +150,10 @@ struct TweaksView: View {
                 AppCardHeader(icon: "slider.horizontal.below.rectangle", title: "Mẫu")
                 NavigationLink(destination: TemplatesView(selection: .constant(TemplateSelection()))) {
                     HStack(spacing: 10) {
-                        Text("Quản lý mẫu").font(.subheadline)
+                        Image(systemName: "square.stack.3d.up.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                        Text("Quản lý mẫu").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
@@ -134,7 +181,7 @@ struct TweaksView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
                         Text("Nhập autosave.json")
-                            .font(.subheadline)
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -157,7 +204,7 @@ struct TweaksView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.danger)
                         Text("Xoá toàn bộ tinh chỉnh")
-                            .font(.subheadline)
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(AppPalette.danger)
                         Spacer()
                     }
@@ -173,29 +220,38 @@ struct TweaksView: View {
     }
 
     @ViewBuilder
-    private func tweakCards(specs: [TweakSpec]) -> some View {
-        ForEach(TweakSection.allCases.filter { $0 != .daemons }) { section in
-            let sectionSpecs = specs.filter { $0.section == section }
-            if !sectionSpecs.isEmpty {
-                let on = sectionSpecs.filter { selection.isOn($0) }.count
-                let collapsed = collapsedBinding(for: section, specs: sectionSpecs)
-                AppCard(padding: 12) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        NativeCollapsibleHeader(
-                            title: "\(section.rawValue) (\(on)/\(sectionSpecs.count))",
-                            collapsed: collapsed)
-                        if !collapsed.wrappedValue {
-                            ForEach(Array(sectionSpecs.enumerated()), id: \.element.id) { idx, spec in
-                                TweakRow(spec: spec, selection: $selection)
-                                    .equatable()
-                                    .id("\(spec.id)#\(formEpoch)")
-                                if idx < sectionSpecs.count - 1 { AppDivider() }
-                            }
+    private var sectionCards: some View {
+        ForEach(cachedSections) { cs in
+            let onCount = cs.specs.reduce(0) { $0 + (selection.isOn($1) ? 1 : 0) }
+            let collapsed = collapsedBinding(for: cs.section)
+            AppCard(padding: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    NativeCollapsibleHeader(
+                        title: "\(cs.section.rawValue) (\(onCount)/\(cs.specs.count))",
+                        collapsed: collapsed)
+                    if !collapsed.wrappedValue {
+                        ForEach(Array(cs.specs.enumerated()), id: \.element.id) { idx, spec in
+                            TweakRow(spec: spec, selection: $selection)
+                                .equatable()
+                                .id("\(spec.id)#\(formEpoch)")
+                            if idx < cs.specs.count - 1 { AppDivider() }
                         }
                     }
                 }
             }
         }
+    }
+
+    private func collapsedBinding(for section: TweakSection) -> Binding<Bool> {
+        Binding(
+            get: {
+                if foldedByHand.contains(section) { return collapsedSections.contains(section) }
+                return false
+            },
+            set: { collapsed in
+                foldedByHand.insert(section)
+                if collapsed { collapsedSections.insert(section) } else { collapsedSections.remove(section) }
+            })
     }
 
     private func reportCard(_ report: TweakImportReport) -> some View {
@@ -251,22 +307,10 @@ struct TweaksView: View {
         }
     }
 
-    private var visibleSpecs: [TweakSpec] {
-        let hidden = hotload.currentPolicy.hiddenTweakIDs
-        return TweakCatalog.all.filter {
-            $0.section != .daemons
-                && !hidden.contains($0.id)
-                && $0.isCompatible(deviceVersion: identity.version, isIPhone: identity.isIPhone, deviceModel: identity.productType)
-                && matchesSearch($0)
-        }
-    }
+    // MARK: - Helpers
 
     private var searchActive: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func matchesSearch(_ spec: TweakSpec) -> Bool {
-        searchMatches(query: searchText, spec.title, spec.detail ?? "", spec.id)
     }
 
     private func restoreAutosave() {
