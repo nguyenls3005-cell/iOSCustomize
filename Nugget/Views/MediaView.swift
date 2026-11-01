@@ -27,27 +27,30 @@ struct MediaView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                mediaCard
-                if !lines.isEmpty { logCard }
-                if let error { errorCard(error) }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    mediaCard
+                    if !lines.isEmpty { logCard }
+                    if let error { errorCard(error) }
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Media")
+        .tint(AppPalette.accent)
+        .navigationTitle("Phương tiện")
         .navigationBarTitleDisplayMode(.inline)
         .task { loadManifest() }
         .confirmationDialog(
-            "Copy media and remove eligible originals?",
+            "Copy phương tiện và xoá bản gốc hợp lệ?",
             isPresented: $confirmPull, titleVisibility: .visible
         ) {
-            Button("Copy and remove originals", role: .destructive) { Task { await doPull() } }
-            Button("Cancel", role: .cancel) {}
+            Button("Copy và xoá bản gốc", role: .destructive) { Task { await doPull() } }
+            Button("Huỷ", role: .cancel) {}
         } message: {
-            Text("\(bytes(survey?.bytes ?? 0)) will be copied into this app's container. Files larger than 64 MiB will also stay on the device. Free space there: \(bytes(free)). Once removed, the copy in the container is the only one -- and the container is deleted if the app is.")
+            Text("\(bytes(survey?.bytes ?? 0)) sẽ được copy vào container app. Tệp lớn hơn 64 MiB sẽ vẫn ở lại thiết bị. Dung lượng trống container: \(bytes(free)). Sau khi xoá, bản copy trong container là bản duy nhất — container mất khi xoá app.")
         }
     }
 
@@ -55,19 +58,17 @@ struct MediaView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
                 AppCardHeader(icon: "photo.on.rectangle.angled", title: "AFC media")
-                NativeNote("Copies \(AfcMediaBackup.trees.joined(separator: " and ")) from the device's Media root over AFC into this app's container. Needs no photo-library permission.")
+                NativeNote("Copy \(AfcMediaBackup.trees.joined(separator: " và ")) từ root Media của thiết bị qua AFC vào container app. Không cần quyền thư viện ảnh.")
 
                 if let survey {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(survey.files.count) file(s), \(bytes(survey.bytes))"
-                            + (survey.skippedSymlinks > 0 ? ", \(survey.skippedSymlinks) symlink(s) skipped" : ""))
-                            .font(.system(size: 14, weight: .medium))
-                        NativeNote("Free in the container: \(bytes(free)).")
+                        Text("\(survey.files.count) tệp, \(bytes(survey.bytes))"
+                            + (survey.skippedSymlinks > 0 ? ", \(survey.skippedSymlinks) symlink bỏ qua" : ""))
+                            .font(.footnote.weight(.medium))
+                        NativeNote("Trống trong container: \(bytes(free)).")
                     }
                 } else {
-                    Text("Not surveyed")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                    Text("Chưa khảo sát").font(.footnote).foregroundStyle(.secondary)
                 }
 
                 Button {
@@ -77,7 +78,7 @@ struct MediaView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Survey").font(.system(size: 15, weight: .medium))
+                        Text("Khảo sát").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -90,48 +91,56 @@ struct MediaView: View {
                 AppDivider()
 
                 Toggle(isOn: $deleteOriginals) {
-                    Text("Delete originals after copy")
-                        .font(.system(size: 15, weight: .medium))
+                    Text("Xoá bản gốc sau khi copy")
+                        .font(.subheadline.weight(.medium))
                         .foregroundStyle(deleteOriginals ? AppPalette.danger : Color.primary)
                 }
                 .tint(AppPalette.danger)
                 NativeNote(deleteOriginals
-                    ? "Originals up to 64 MiB are removed after the verified copy is saved for recovery. Larger originals stay on the device."
-                    : "Off: copies are made and the originals stay put.")
+                    ? "Bản gốc tối đa 64 MiB bị xoá sau khi bản copy đã xác minh. Bản gốc lớn hơn ở lại thiết bị."
+                    : "Tắt: bản copy được tạo, bản gốc giữ nguyên.")
 
                 AppDivider()
 
-                AppButton(title: "Pull media",
+                AppButton(title: "Kéo phương tiện về",
                           systemImage: "arrow.down.doc",
                           disabled: busy) {
                     Task { await pull() }
                 }
-                AppButton(title: "Push back to device",
+                AppButton(title: "Đẩy ngược lại thiết bị",
                           systemImage: "arrow.up.doc",
-                          disabled: busy || !hasStoredFiles) {
+                          disabled: busy || !hasStoredFiles,
+                          prominent: false) {
                     Task { await push() }
                 }
-                AppButton(title: "Empty the local store",
-                          systemImage: "trash",
-                          disabled: busy || !hasStoredFiles,
-                          destructive: true) {
+                Button(role: .destructive) {
                     Task {
                         await run {
                             try AfcMediaBackup.clear()
                             loadManifest()
-                            lines.append("Local media store emptied.")
+                            lines.append("Đã xoá store phương tiện cục bộ.")
                         }
                     }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash").font(.system(size: 14, weight: .semibold))
+                        Text("Xoá store cục bộ").font(.callout.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                NativeSafetyNote("Emptying the store is only safe once the originals are back on the device and verified there.")
+                .buttonStyle(.glassProminent)
+                .tint(AppPalette.danger)
+                .controlSize(.large)
+                .disabled(busy || !hasStoredFiles)
+                NativeSafetyNote("Chỉ xoá store khi bản gốc đã về thiết bị và xác minh. Xoá khi chưa khôi phục = mất dữ liệu.")
             }
         }
     }
 
     private var logCard: some View {
-        AppCard(padding: 14) {
+        AppCard(padding: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "terminal", title: "Log")
+                AppCardHeader(icon: "terminal", title: "Nhật ký")
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(lines.suffix(40).enumerated()), id: \.offset) { _, line in
@@ -143,6 +152,7 @@ struct MediaView: View {
                     }
                 }
                 .frame(height: 200)
+                .scrollIndicators(.hidden)
             }
         }
     }
@@ -151,20 +161,18 @@ struct MediaView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(icon: "exclamationmark.triangle.fill",
-                              title: "Failed",
+                              title: "Thất bại",
                               tint: AppPalette.danger)
                 NativeSafetyNote(message)
             }
         }
     }
 
-    // MARK: - Actions
-
     private func runSurvey() async {
         await run {
             let s = try await AfcMediaBackup.survey()
             survey = s
-            lines = ["Survey: \(s.files.count) file(s), \(bytes(s.bytes))."]
+            lines = ["Khảo sát: \(s.files.count) tệp, \(bytes(s.bytes))."]
         }
     }
 
@@ -181,7 +189,7 @@ struct MediaView: View {
             manifest = m
             hasStoredFiles = storeHasFiles()
             let removed = m.entries.filter(\.deleted).count
-            lines.append("Store contains \(m.entries.count) file(s); \(removed) original(s) removed across saved transfers.")
+            lines.append("Store có \(m.entries.count) tệp; \(removed) bản gốc đã xoá qua các lượt transfer.")
         }
     }
 
