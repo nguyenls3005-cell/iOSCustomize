@@ -53,13 +53,15 @@ struct FirstRunView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             footer
         }
-        .background(FirstRunBackground())
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Set Up")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let onClose {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Close") { onClose() }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AppPalette.accent)
                 }
             }
         }
@@ -79,10 +81,8 @@ struct FirstRunView: View {
         }
         .fileImporter(isPresented: $showPairingImporter, allowedContentTypes: PairingRecord.types) { result in
             switch result {
-            case .success(let url):
-                importRecord(from: url)
-            case .failure(let error):
-                errorText = error.localizedDescription
+            case .success(let url): importRecord(from: url)
+            case .failure(let error): errorText = error.localizedDescription
             }
         }
         .onOpenURL { url in
@@ -106,16 +106,18 @@ struct FirstRunView: View {
             HStack {
                 if page == 0 {
                     Button("Skip setup for now") { skip() }
-                        .font(.subheadline)
+                        .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 } else {
                     Button {
                         withAnimation(.snappy) { page -= 1 }
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.body.weight(.semibold))
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppPalette.accent)
                             .frame(width: 44, height: 44)
-                            .background(.quaternary, in: Circle())
+                            .background(AppPalette.accent.opacity(0.10),
+                                        in: Circle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Previous slide")
@@ -131,39 +133,43 @@ struct FirstRunView: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text(page == 0 ? "Get started" : "Continue")
+                                .font(.system(size: 15, weight: .semibold))
                             Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .bold))
                         }
-                        .font(.body.weight(.semibold))
-                        .padding(.horizontal, 16)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
                         .frame(height: 44)
-                        .background(.quaternary, in: Capsule())
+                        .background(AppPalette.accent,
+                                    in: RoundedRectangle(cornerRadius: AppPalette.rButton, style: .continuous))
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Color.clear
-                        .frame(width: 44, height: 44)
-                        .accessibilityHidden(true)
+                    Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
                 }
             }
             if page == lastPage {
-                NativePrimaryButton(title: "Finish setup", systemImage: "checkmark", disabled: !canFinish) {
+                AppButton(title: "Finish setup",
+                          systemImage: "checkmark",
+                          disabled: !canFinish) {
                     finish()
                 }
                 Button("Skip setup for now") { skip() }
-                    .font(.subheadline)
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                 NativeNote("Skipping is not a dead end: this guide is in Settings afterwards.")
+                    .multilineTextAlignment(.center)
             }
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.bottom, 16)
     }
 
     private func pageDot(_ index: Int) -> some View {
         Capsule()
-            .fill(index == page ? Color.accentColor : Color(.tertiaryLabel))
+            .fill(index == page ? AppPalette.accent : Color(.tertiaryLabel))
             .frame(width: index == page ? 20 : 7, height: 7)
             .animation(.spring(duration: 0.25), value: page)
             .accessibilityLabel("Slide \(index + 1) of \(lastPage + 1)")
@@ -176,8 +182,8 @@ struct FirstRunView: View {
         SlideLayout(
             art: { FirstRunWelcomeArt(active: page == 0) },
             title: "iOSCustomize",
-            subtitle: "Restyle this iPhone's SpringBoard, status bar and daemons. Two steps stand in front of it.")
-        {
+            subtitle: "Restyle this iPhone's SpringBoard, status bar and daemons. Two steps stand in front of it."
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 stepCard(number: 1, title: "Tunnel", done: tunnel.isReady,
                          working: tunnel == .peerUnreachable, status: tunnel.shortText,
@@ -196,31 +202,43 @@ struct FirstRunView: View {
         SlideLayout(
             art: { FirstRunTunnelArt(ready: tunnel.isReady, active: page == 1) },
             title: "1 · Tunnel",
-            subtitle: "Install LocalDevVPN (or any tunnel app), enter the values below, and leave it on — every connection needs it.")
-        {
+            subtitle: "Install LocalDevVPN (or any tunnel app), enter the values below, and leave it on — every connection needs it."
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 statusPill(done: tunnel.isReady, working: tunnel == .peerUnreachable,
                            text: tunnel.shortText)
                 Text(Tunnel.requirements)
-                    .font(.footnote.monospaced())
+                    .font(.system(size: 12, design: .monospaced))
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
-                    .background(Color(.secondarySystemBackground),
-                                in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(Color(uiColor: .secondarySystemGroupedBackground),
+                                in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous))
                 HStack(spacing: 10) {
                     Button {
                         UIPasteboard.general.string = Tunnel.requirements
                     } label: {
                         Text("Copy these values")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(AppPalette.accent.opacity(0.10),
+                                        in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                     Button {
                         Task { await probe() }
                     } label: {
                         Label("Check again", systemImage: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(AppPalette.accent.opacity(0.10),
+                                        in: RoundedRectangle(cornerRadius: AppPalette.rSmall, style: .continuous))
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.plain)
                 }
                 if tunnel == .interfaceMissing {
                     NativeNote("No interface carries \(Tunnel.ifaceIP) — the VPN app may be on the wrong network, or its tunnel IP left at default.")
@@ -236,8 +254,8 @@ struct FirstRunView: View {
         SlideLayout(
             art: { FirstRunPairArt(linked: pairingReady, active: page == 2) },
             title: "2 · Pairing",
-            subtitle: "The PC version's Mobile Helper is the easiest route. The two cards below are fallbacks.")
-        {
+            subtitle: "The PC version's Mobile Helper is the easiest route. The two cards below are fallbacks."
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 statusPill(done: pairingReady, working: wirelessPair.isRunning,
                            text: pairingReady ? "Pairing record in place" : "No pairing record yet")
@@ -262,32 +280,32 @@ struct FirstRunView: View {
     private var helperCard: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: "desktopcomputer")
-                .font(.title3)
-                .foregroundStyle(.tint)
+                .font(.system(size: 18))
+                .foregroundStyle(AppPalette.accent)
                 .frame(width: 34)
                 .padding(.top, 2)
             VStack(alignment: .leading, spacing: 4) {
                 Text("The PC version does this for you")
-                    .font(.headline)
+                    .font(.system(size: 14, weight: .semibold))
                 Text("Connect this iPhone over USB and tap Trust, then open GoldenNugget on the computer — iOS → “GoldenNugget Mobile Helper”. It installs the app and sends the pairing file itself.")
-                    .font(.footnote)
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 NativeNote("Send the file while the app is closed, then reopen it.")
             }
             Spacer(minLength: 0)
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: AppPalette.rInner, style: .continuous))
     }
 
     private var finishSlide: some View {
         SlideLayout(
             art: { FirstRunFinishArt(ready: canFinish, active: page == lastPage) },
             title: "All set",
-            subtitle: "Finishing connects to the device and opens the home page.")
-        {
+            subtitle: "Finishing connects to the device and opens the home page."
+        ) {
             VStack(alignment: .leading, spacing: 12) {
                 stepCard(number: 1, title: "Tunnel", done: tunnel.isReady,
                          working: tunnel == .peerUnreachable, status: tunnel.shortText,
@@ -313,26 +331,28 @@ struct FirstRunView: View {
         } label: {
             HStack(spacing: 12) {
                 Text("\(number)")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(done ? Color.green : Color.accentColor)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(done ? AppPalette.success : AppPalette.accent)
                     .frame(width: 30, height: 30)
-                    .background(.quaternary, in: Circle())
+                    .background(Color.primary.opacity(0.06), in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.headline)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.primary)
                     Text(status)
-                        .font(.footnote)
-                        .foregroundStyle(done ? Color.green : working ? Color.orange : Color.secondary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(done ? AppPalette.success
+                                         : working ? AppPalette.warning
+                                         : Color.secondary)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(12)
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: AppPalette.rInner, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityHint("Opens this step's slide")
@@ -343,26 +363,26 @@ struct FirstRunView: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(.tint)
+                    .font(.system(size: 18))
+                    .foregroundStyle(AppPalette.accent)
                     .frame(width: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.headline)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.footnote)
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(12)
-            .background(Color(.secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(14)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: AppPalette.rInner, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -370,29 +390,31 @@ struct FirstRunView: View {
     private func statusPill(done: Bool, working: Bool = false, text: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: done ? "checkmark.circle.fill" : working ? "ellipsis.circle.fill" : "circle.dashed")
-                .foregroundStyle(done ? Color.green : working ? Color.orange : Color.secondary)
+                .foregroundStyle(done ? AppPalette.success : working ? AppPalette.warning : Color.secondary)
                 .accessibilityHidden(true)
             Text(text)
-                .font(.subheadline.weight(.medium))
+                .font(.system(size: 13, weight: .medium))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.quinary, in: Capsule())
+        .background(Color.primary.opacity(0.06),
+                    in: Capsule())
     }
 
     private var wirelessCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                ProgressView()
+                ProgressView().tint(AppPalette.accent)
                 Text(wirelessPair.serviceName
                         .map { "Advertising “\($0)” — waiting for this iPhone to connect…" }
                      ?? "Starting the pairing service…")
-                    .font(.subheadline)
+                    .font(.system(size: 13, weight: .medium))
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let pin = wirelessPair.pin {
                 Text("PIN: \(pin)")
-                    .font(.title3.monospaced().weight(.semibold))
+                    .font(.system(size: 22, weight: .bold, design: .monospaced))
+                    .foregroundStyle(AppPalette.accent)
                     .textSelection(.enabled)
                 NativeNote("Confirm it in Settings → Privacy & Security → Developer Mode → “Pair with \(WirelessPairing.displayName)”.")
             } else {
@@ -402,11 +424,13 @@ struct FirstRunView: View {
                 wirelessPair.cancel()
             } label: {
                 Label("Cancel pairing", systemImage: "xmark.circle")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(AppPalette.danger)
             }
         }
-        .padding(12)
-        .background(Color(.secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: AppPalette.rInner, style: .continuous))
     }
 
     private var canFinish: Bool { tunnel.isReady && pairingReady }
@@ -415,8 +439,7 @@ struct FirstRunView: View {
 
     private func finish() {
         firstRun.complete(reason: "tunnel and pairing record both ready")
-        GoldenNuggetEngine.shared.startAutomaticMediaPull(
-            reason: "setup finished", force: true)
+        GoldenNuggetEngine.shared.startAutomaticMediaPull(reason: "setup finished", force: true)
         onClose?()
     }
 
@@ -477,9 +500,9 @@ private struct SlideLayout<Art: View, Content: View>: View {
                 .padding(.top, 16)
             VStack(spacing: 8) {
                 Text(title)
-                    .font(.largeTitle.weight(.bold))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                 Text(subtitle)
-                    .font(.body)
+                    .font(.system(size: 15))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -494,18 +517,5 @@ private struct SlideLayout<Art: View, Content: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-    }
-}
-
-private struct FirstRunBackground: View {
-    var body: some View {
-        ZStack {
-            Color(.systemBackground)
-            LinearGradient(colors: [Color.accentColor.opacity(0.10), .clear],
-                           startPoint: .top,
-                           endPoint: UnitPoint(x: 0.5, y: 0.6))
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 }
