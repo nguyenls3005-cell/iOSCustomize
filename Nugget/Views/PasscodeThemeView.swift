@@ -1,14 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Passcode (lock screen keypad) themes.
-///
-/// The page imports a `.passthm`, shows what is in it, and writes it into
-/// TelephonyUI's caches. The two settings that look like a preference —
-/// language and weight — are the part worth explaining: the device picks a file
-/// by name, encoding the locale, the weight and the key's subtext, so a theme is
-/// a matrix of files rather than a single image, and these two settings decide
-/// how much of that matrix gets written.
 struct PasscodeThemeView: View {
     @State private var identity: DeviceIdentity = .unknown
     @State private var theme: PasscodeThemeInfo?
@@ -21,22 +13,20 @@ struct PasscodeThemeView: View {
     @State private var showImporter = false
 
     var body: some View {
-        List {
-            deviceSection
-            importSection
-            if let theme { previewSection(theme) }
-            optionsSection
-            applySection
-            if let status {
-                Section {
-                    Text(status)
-                        .foregroundStyle(tone.nativeColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+        ScrollView {
+            VStack(spacing: AppPalette.sGap) {
+                deviceCard
+                importCard
+                if let theme { previewCard(theme) }
+                optionsCard
+                applyCard
+                if let status { statusCard(status) }
+                if !log.isEmpty { logCard }
             }
-            if !log.isEmpty { runLog }
+            .padding(.horizontal, AppPalette.sScreen)
+            .padding(.vertical, 12)
         }
-        .listStyle(.insetGrouped)
+        .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("Passcode")
         .navigationBarTitleDisplayMode(.inline)
         .task { identity = await DeviceIdentity.read() }
@@ -56,38 +46,53 @@ struct PasscodeThemeView: View {
 
     // MARK: - Cards
 
-    private var deviceSection: some View {
-        Section {
-            Text(identity.describe)
-                .font(.headline)
-            NativeNote("The keypad's artwork is written into "
-                + "/var/mobile/Library/Caches/TelephonyUI-…, which is a cache rather than a "
-                + "preference, so a backup cannot carry it. Lock the device to see the result.")
-            if !blocker.isEmpty { NativeSafetyNote(blocker) }
-        }
-    }
-
-    private var importSection: some View {
-        Section {
-            Button {
-                showImporter = true
-            } label: {
-                Label(theme == nil ? "Import a .passthm" : "Import another",
-                      systemImage: "square.and.arrow.down")
-            }
-            if let theme {
-                NativeNote("\(theme.name) — \(theme.fileCount) file(s), "
-                    + "\(theme.keysPreview.count) key(s) found.")
+    private var deviceCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(identity.describe)
+                    .font(.system(size: 15, weight: .semibold))
+                NativeNote("The keypad's artwork is written into /var/mobile/Library/Caches/TelephonyUI-…, which is a cache rather than a preference, so a backup cannot carry it. Lock the device to see the result.")
+                if !blocker.isEmpty { NativeSafetyNote(blocker) }
             }
         }
     }
 
-    private func previewSection(_ theme: PasscodeThemeInfo) -> some View {
-        Section("Keys") {
-            ForEach(0..<4, id: \.self) { row in
-                HStack(spacing: 8) {
-                    ForEach(0..<3, id: \.self) { column in
-                        keySlot(theme, row: row, column: column)
+    private var importCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "square.and.arrow.down", title: "Theme archive")
+                Button {
+                    showImporter = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppPalette.accent)
+                        Text(theme == nil ? "Import a .passthm" : "Import another")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if let theme {
+                    NativeNote("\(theme.name) — \(theme.fileCount) file(s), \(theme.keysPreview.count) key(s) found.")
+                }
+            }
+        }
+    }
+
+    private func previewCard(_ theme: PasscodeThemeInfo) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "rectangle.grid.3x2", title: "Keys")
+                ForEach(0..<4, id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(0..<3, id: \.self) { column in
+                            keySlot(theme, row: row, column: column)
+                        }
                     }
                 }
             }
@@ -105,7 +110,7 @@ struct PasscodeThemeView: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(height: 44)
             } else {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.quaternary)
                     .frame(height: 44)
             }
@@ -116,22 +121,18 @@ struct PasscodeThemeView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var optionsSection: some View {
-        Section {
-            optionRow(title: "Language", selection: $language, choices: PasscodeLanguageTarget.allCases)
-            optionRow(title: "Weight", selection: $weight, choices: PasscodeBoldTarget.allCases)
-            NativeNote("The device asks for one file per locale, weight and key "
-                + "subtext. \"All languages\" writes every variant — it is the only setting that "
-                + "works on a device whose language you do not know — while the device's own "
-                + "locale and the fallback are always included either way.")
+    private var optionsCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "slider.horizontal.3", title: "Options")
+                optionRow(title: "Language", selection: $language, choices: PasscodeLanguageTarget.allCases)
+                AppDivider()
+                optionRow(title: "Weight", selection: $weight, choices: PasscodeBoldTarget.allCases)
+                NativeNote("The device asks for one file per locale, weight and key subtext. \"All languages\" writes every variant — it is the only setting that works on a device whose language you do not know — while the device's own locale and the fallback are always included either way.")
+            }
         }
     }
 
-    /// A titled picker row.
-    ///
-    /// The platform control is used rather than a hand-drawn one: a picker on iOS
-    /// *is* the wheel-and-menu the reference draws, and a switch would be the
-    /// wrong shape for a seventeen-value choice.
     private func optionRow<Option: Identifiable & Hashable & RawRepresentable>(
         title: String,
         selection: Binding<Option>,
@@ -144,30 +145,46 @@ struct PasscodeThemeView: View {
         }
     }
 
-    private var applySection: some View {
-        Section {
-            Button {
-                apply()
-            } label: {
-                HStack {
-                    Label(running ? "Applying…" : "Apply theme",
-                          systemImage: "lock.rectangle.stack.fill")
-                    Spacer()
-                    if running { ProgressView().controlSize(.small) }
+    private var applyCard: some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: 10) {
+                AppCardHeader(icon: "lock.rectangle.stack.fill", title: "Apply")
+                AppButton(title: running ? "Applying…" : "Apply theme",
+                          systemImage: "lock.rectangle.stack.fill",
+                          running: running,
+                          disabled: running || theme == nil || !blocker.isEmpty) {
+                    apply()
                 }
+                if !blocker.isEmpty { NativeSafetyNote(blocker) }
             }
-            .disabled(running || theme == nil || !blocker.isEmpty)
-            if !blocker.isEmpty { NativeSafetyNote(blocker) }
         }
     }
 
-    private var runLog: some View {
-        Section {
-            ForEach(Array(log.enumerated()), id: \.offset) { _, line in
-                Text(line)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    private func statusCard(_ text: String) -> some View {
+        AppCard {
+            Text(text)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(tone.nativeColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var logCard: some View {
+        AppCard(padding: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                AppCardHeader(icon: "terminal", title: "Log")
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(log.enumerated()), id: \.offset) { _, line in
+                            Text(line)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(height: 180)
             }
         }
     }
@@ -177,9 +194,6 @@ struct PasscodeThemeView: View {
     private func importTheme(_ result: Result<URL, Error>) {
         switch result {
         case .success(let url):
-            // The importer hands back a security-scoped URL; the archive is read on
-            // this side of the boundary, so the scope has to be open for the read —
-            // and for the whole unpack, which is where the time goes.
             let scoped = url.startAccessingSecurityScopedResource()
             Task { @MainActor in
                 defer { if scoped { url.stopAccessingSecurityScopedResource() } }
