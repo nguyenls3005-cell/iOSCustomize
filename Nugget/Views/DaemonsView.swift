@@ -14,42 +14,45 @@ struct DaemonsView: View {
     @State private var searchText = ""
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                masterCard
-                coverageCard
-                if searchActive && !DaemonGroups.all.contains(where: { $0.showsSwitch && matchesSearch($0) }) {
-                    emptySearchCard
-                }
-                ForEach(DaemonSection.allCases) { section in
-                    let groups = visibleGroups(in: section)
-                    if !groups.isEmpty {
-                        let collapsed = collapsedBinding(for: section, groups: groups)
-                        AppCard(padding: 14) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                NativeCollapsibleHeader(
-                                    title: "\(section.rawValue) (\(onCount(in: groups))/\(groups.count))",
-                                    collapsed: collapsed)
-                                if !collapsed.wrappedValue {
-                                    ForEach(Array(groups.enumerated()), id: \.element.name) { idx, group in
-                                        groupRow(group)
-                                        if idx < groups.count - 1 { AppDivider() }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    masterCard
+                    coverageCard
+                    if searchActive && !DaemonGroups.all.contains(where: { $0.showsSwitch && matchesSearch($0) }) {
+                        emptySearchCard
+                    }
+                    ForEach(DaemonSection.allCases) { section in
+                        let groups = visibleGroups(in: section)
+                        if !groups.isEmpty {
+                            let collapsed = collapsedBinding(for: section, groups: groups)
+                            AppCard(padding: 14) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    NativeCollapsibleHeader(
+                                        title: "\(section.rawValue) (\(onCount(in: groups))/\(groups.count))",
+                                        collapsed: collapsed)
+                                    if !collapsed.wrappedValue {
+                                        ForEach(Array(groups.enumerated()), id: \.element.name) { idx, group in
+                                            groupRow(group)
+                                            if idx < groups.count - 1 { AppDivider() }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    screenTimeCard
                 }
-                screenTimeCard
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
+        .tint(AppPalette.accent)
         .navigationTitle("Daemons")
         .searchable(text: $searchText,
                     placement: .navigationBarDrawer(displayMode: .always),
-                    prompt: "Search daemons")
+                    prompt: "Tìm daemon")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $pendingEnable) { action in
             DaemonEnableWarningSheet {
@@ -63,17 +66,26 @@ struct DaemonsView: View {
         }
     }
 
-    // MARK: - Sections
+    // MARK: - Cards
 
     private var coverageCard: some View {
         AppCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(identity.describe)
+            HStack(spacing: 12) {
+                Image(systemName: "gearshape.2.fill")
                     .font(.system(size: 15, weight: .semibold))
-                NativeNote("\(onCount(in: DaemonGroups.all.filter { $0.showsSwitch })) "
-                    + "of \(DaemonGroups.all.filter { $0.showsSwitch }.count) daemon group(s) on. "
-                    + "The groups upstream marks interface-visible but gives no switch are in the "
-                    + "Recommended set only.")
+                    .foregroundStyle(AppPalette.accent)
+                    .frame(width: 36, height: 36)
+                    .background(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(AppPalette.accent.opacity(0.15))
+                    )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(identity.describe).font(.subheadline.weight(.semibold))
+                    Text("\(onCount(in: DaemonGroups.all.filter { $0.showsSwitch })) / \(DaemonGroups.all.filter { $0.showsSwitch }.count) nhóm daemon đang bật")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
             }
         }
     }
@@ -98,24 +110,20 @@ struct DaemonsView: View {
     private var masterCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 12) {
-                AppCardHeader(icon: "gearshape.2.fill", title: "Daemon modifications")
+                AppCardHeader(icon: "gearshape.2.fill", title: "Sửa daemon")
                 masterRow
                 AppDivider()
                 recommendedRow
                 if !hotload.currentPolicy.forcedDaemons.isEmpty {
-                    NativeSafetyNote("HotLoad forces \(hotload.currentPolicy.forcedDaemons.count) daemon label(s) disabled, even when daemon modifications are off.")
+                    NativeSafetyNote("HotLoad buộc \(hotload.currentPolicy.forcedDaemons.count) label daemon bị tắt, kể cả khi daemon modifications đang tắt.")
                 }
-                NativeNote("Writes "
-                    + "/var/db/com.apple.xpc.launchd/disabled.plist. Disabling a "
-                    + "daemon stops its service. Only the "
-                    + "\(DaemonGroups.allowedKeys.count) labels shown here can "
-                    + "ever reach the file.")
+                NativeNote("Ghi vào /var/db/com.apple.xpc.launchd/disabled.plist. Tắt daemon = dừng service. Chỉ \(DaemonGroups.allowedKeys.count) label hiển thị ở đây mới có thể vào tệp.")
             }
         }
     }
 
     private var masterRow: some View {
-        Toggle("Enable Daemon Modifications", isOn: Binding(
+        Toggle("Bật sửa đổi daemon", isOn: Binding(
             get: { selection.daemonModificationsEnabled },
             set: { on in
                 if on {
@@ -139,12 +147,12 @@ struct DaemonsView: View {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(AppPalette.accent)
-                Text("Recommended (analytics, tracking & logging)")
-                    .font(.system(size: 15, weight: .medium))
+                Text("Đề xuất (analytics, tracking & logging)")
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
             .padding(.vertical, 4)
@@ -156,14 +164,11 @@ struct DaemonsView: View {
     private var screenTimeCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "hourglass", title: "Other", tint: AppPalette.warning)
+                AppCardHeader(icon: "hourglass", title: "Khác", tint: AppPalette.warning)
                 let spec = TweakCatalog.screenTimeSpec
                 TweakRow(spec: spec, selection: $selection,
                          isOn: { isOn(spec) }, setOn: { requestSetOn($0, for: spec) })
-                NativeNote("Writes a 0-byte file over "
-                    + "\(DaemonGroups.screenTime.path). Upstream models this as "
-                    + "a NullifyFileTweak: it removes a plist rather than "
-                    + "writing one.")
+                NativeNote("Ghi tệp 0-byte đè lên \(DaemonGroups.screenTime.path). Upstream mô hình hoá như NullifyFileTweak: xoá plist thay vì ghi.")
             }
         }
     }
@@ -171,8 +176,8 @@ struct DaemonsView: View {
     private var emptySearchCard: some View {
         AppCard {
             AppEmptyState(icon: "magnifyingglass",
-                          title: "No matches",
-                          message: "No daemon group matches the query.")
+                          title: "Không có kết quả",
+                          message: "Không nhóm daemon nào khớp từ khoá.")
         }
     }
 
@@ -184,15 +189,15 @@ struct DaemonsView: View {
             TweakRow(spec: spec, selection: $selection,
                      isOn: { group.labels.allSatisfy { hotload.currentPolicy.forcedDaemons[$0] != nil } || isOn(spec) },
                      setOn: { requestSetOn($0, for: spec) })
+                .equatable()
                 .disabled(group.labels.allSatisfy { hotload.currentPolicy.forcedDaemons[$0] != nil })
             let forced = group.labels.filter { hotload.currentPolicy.forcedDaemons[$0] != nil }
             if !forced.isEmpty {
-                NativeSafetyNote("HotLoad: \(forced.count)/\(group.labels.count) labels forced disabled. "
+                NativeSafetyNote("HotLoad: \(forced.count)/\(group.labels.count) label bị buộc tắt. "
                     + (forced.first.flatMap { hotload.currentPolicy.forcedDaemons[$0] } ?? ""))
             }
         } else {
-            Text(group.title)
-                .foregroundStyle(.tertiary)
+            Text(group.title).foregroundStyle(.tertiary)
         }
     }
 
@@ -274,13 +279,10 @@ struct DaemonsView: View {
     }
 }
 
-// MARK: - Warning sheet
-
 private enum DaemonEnableAction: Identifiable {
     case master
     case recommended
     case tweak(String)
-
     var id: String {
         switch self {
         case .master: "master"
@@ -300,23 +302,25 @@ private struct DaemonEnableWarningSheet: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.largeTitle)
                 .foregroundStyle(AppPalette.warning)
-                .accessibilityHidden(true)
-            Text("Before you continue")
-                .font(.system(size: 18, weight: .semibold))
+            Text("Trước khi tiếp tục").font(.headline)
             Text(backupWarning
-                 ? "Make a full device backup before applying these changes."
-                 : "Stopping system services can leave your device stuck restarting or unable to start. Recovery may require restoring the device.")
-                .font(.system(size: 14))
+                 ? "Sao lưu toàn bộ thiết bị trước khi áp dụng."
+                 : "Dừng service hệ thống có thể làm máy kẹt khởi động hoặc không bật được. Cứu hộ có thể cần khôi phục máy.")
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 8)
-            AppButton(title: "Continue Anyway",
-                      destructive: true) {
+            Button {
                 if backupWarning { confirm() } else { backupWarning = true }
+            } label: {
+                Text("Vẫn tiếp tục").font(.callout.weight(.semibold)).frame(maxWidth: .infinity)
             }
-            Button("Stop", role: .cancel) { dismiss() }
-                .font(.system(size: 15, weight: .medium))
+            .buttonStyle(.glassProminent)
+            .tint(AppPalette.danger)
+            .controlSize(.large)
+            Button("Dừng", role: .cancel) { dismiss() }
+                .font(.subheadline.weight(.medium))
         }
         .padding(24)
         .presentationDetents([.medium, .large])
