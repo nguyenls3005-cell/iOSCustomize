@@ -22,20 +22,23 @@ struct PresetManagerView: View {
     @State private var showImporter = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: AppPalette.sGap) {
-                introCard
-                saveCard
-                presetsCard
-                actionsCard
-                if let message { messageCard(message) }
-                if let loadReport { reportCard(loadReport) }
+        ZStack {
+            AppBackdrop()
+            ScrollView {
+                LazyVStack(spacing: AppPalette.sGap) {
+                    introCard
+                    saveCard
+                    presetsCard
+                    actionsCard
+                    if let message { messageCard(message) }
+                    if let loadReport { reportCard(loadReport) }
+                }
+                .padding(.horizontal, AppPalette.sScreen)
+                .padding(.vertical, 12)
             }
-            .padding(.horizontal, AppPalette.sScreen)
-            .padding(.vertical, 12)
         }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Presets")
+        .tint(AppPalette.accent)
+        .navigationTitle("Preset")
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await deviceMonitor.refresh()
@@ -47,31 +50,31 @@ struct PresetManagerView: View {
             case .failure(let error): setMessage(error.localizedDescription, .error)
             }
         }
-        .alert("Load Preset", isPresented: isPresented($confirmLoad),
+        .alert("Tải Preset", isPresented: isPresented($confirmLoad),
                presenting: confirmLoad) { info in
-            Button("Cancel", role: .cancel) { confirmLoad = nil }
-            Button("Load") {
+            Button("Huỷ", role: .cancel) { confirmLoad = nil }
+            Button("Tải") {
                 performLoad(info)
                 confirmLoad = nil
             }
         } message: { info in
             Text(loadConfirmMessage(info))
         }
-        .alert("Rollback Last Apply", isPresented: $confirmRollback) {
-            Button("Cancel", role: .cancel) {}
-            Button("Roll back") { performRollback() }
+        .alert("Rollback lần Apply trước", isPresented: $confirmRollback) {
+            Button("Huỷ", role: .cancel) {}
+            Button("Rollback") { performRollback() }
         } message: {
-            Text("Load the snapshot taken before the last successful apply? This will replace your current configuration.")
+            Text("Tải snapshot lấy trước lần Apply thành công gần nhất? Thay thế cấu hình hiện tại.")
         }
-        .alert("Delete Preset", isPresented: isPresented($pendingDelete),
+        .alert("Xoá Preset", isPresented: isPresented($pendingDelete),
                presenting: pendingDelete) { info in
-            Button("Cancel", role: .cancel) { pendingDelete = nil }
-            Button("Delete", role: .destructive) {
+            Button("Huỷ", role: .cancel) { pendingDelete = nil }
+            Button("Xoá", role: .destructive) {
                 performDelete(info)
                 pendingDelete = nil
             }
         } message: { info in
-            Text("Delete preset \"\(info.name)\"?")
+            Text("Xoá preset \"\(info.name)\"?")
         }
         .sheet(item: $share) { item in
             ShareSheet(url: item.url)
@@ -90,21 +93,21 @@ struct PresetManagerView: View {
 
     private var introCard: some View {
         AppCard {
-            NativeNote("Save, switch and share complete tweak configurations. Loading a preset replaces the current selection; the home Apply still delivers it to the device.")
+            NativeNote("Lưu, chuyển và chia sẻ cấu hình tinh chỉnh đầy đủ. Tải preset thay thế lựa chọn hiện tại; nút Apply ở trang chủ vẫn đưa vào thiết bị.")
         }
     }
 
     private var saveCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 10) {
-                AppCardHeader(icon: "square.and.arrow.down", title: "Save current configuration")
-                TextField("Preset name", text: $newName)
+                AppCardHeader(icon: "square.and.arrow.down", title: "Lưu cấu hình hiện tại")
+                TextField("Tên preset", text: $newName)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textFieldStyle(.roundedBorder)
-                TextField("Description (optional)", text: $newDescription)
+                TextField("Mô tả (tuỳ chọn)", text: $newDescription)
                     .textFieldStyle(.roundedBorder)
-                AppButton(title: "Save Preset",
+                AppButton(title: "Lưu Preset",
                           systemImage: "square.and.arrow.down",
                           disabled: newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                     saveCurrent()
@@ -117,11 +120,9 @@ struct PresetManagerView: View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
                 AppCardHeader(icon: "tray.2.fill",
-                              title: "Saved presets (\(presets.count))")
+                              title: "Preset đã lưu (\(presets.count))")
                 if presets.isEmpty {
-                    Text("No presets yet.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                    Text("Chưa có preset.").font(.footnote).foregroundStyle(.secondary)
                         .padding(.vertical, 8)
                 } else {
                     ForEach(Array(presets.enumerated()), id: \.element.name) { idx, info in
@@ -136,11 +137,10 @@ struct PresetManagerView: View {
                                                      ? AppPalette.accent : Color.secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(info.name)
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.footnote.weight(.medium))
                                         .foregroundStyle(.primary)
                                     Text(subtitle(info))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .font(.caption).foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
                                 Spacer(minLength: 0)
@@ -160,8 +160,7 @@ struct PresetManagerView: View {
                         Image(systemName: "square.and.arrow.up.on.square")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(AppPalette.accent)
-                        Text("Import Preset…")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Nhập Preset…").font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
                         Spacer()
                     }
@@ -176,15 +175,16 @@ struct PresetManagerView: View {
     private var actionsCard: some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "bolt.fill", title: "Actions")
-                AppButton(title: "Load",
+                AppCardHeader(icon: "bolt.fill", title: "Thao tác")
+                AppButton(title: "Tải",
                           systemImage: "play.fill",
                           disabled: selected == nil) {
                     requestLoad()
                 }
-                AppButton(title: "Export",
+                AppButton(title: "Xuất",
                           systemImage: "square.and.arrow.up",
-                          disabled: selected == nil) {
+                          disabled: selected == nil,
+                          prominent: false) {
                     export(include: nil)
                 }
                 Button {
@@ -194,8 +194,7 @@ struct PresetManagerView: View {
                         Image(systemName: "square.and.arrow.up.on.square")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(selected == nil ? Color.secondary : AppPalette.accent)
-                        Text("Partial Export…")
-                            .font(.system(size: 15, weight: .medium))
+                        Text("Xuất một phần…").font(.subheadline.weight(.medium))
                             .foregroundStyle(selected == nil ? Color.secondary : Color.primary)
                         Spacer()
                     }
@@ -205,20 +204,30 @@ struct PresetManagerView: View {
                 .buttonStyle(.plain)
                 .disabled(selected == nil)
 
-                AppButton(title: "Rollback Last Apply",
+                AppButton(title: "Rollback lần Apply trước",
                           systemImage: "arrow.uturn.backward",
-                          disabled: !GoldenNuggetPresets.hasRollback) {
+                          disabled: !GoldenNuggetPresets.hasRollback,
+                          prominent: false) {
                     requestRollback()
                 }
-                AppButton(title: "Delete",
-                          systemImage: "trash",
-                          disabled: selected == nil,
-                          destructive: true) {
+
+                Button(role: .destructive) {
                     pendingDelete = selected
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash").font(.system(size: 14, weight: .semibold))
+                        Text("Xoá").font(.callout.weight(.semibold))
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.glassProminent)
+                .tint(AppPalette.danger)
+                .controlSize(.large)
+                .disabled(selected == nil)
+
                 NativeNote(GoldenNuggetPresets.hasRollback
-                     ? "Rollback restores the snapshot taken before the last successful apply."
-                     : "Rollback is available once an apply has succeeded.")
+                     ? "Rollback khôi phục snapshot lấy trước lần Apply thành công gần nhất."
+                     : "Rollback khả dụng sau khi có một lần Apply thành công.")
             }
         }
     }
@@ -226,7 +235,7 @@ struct PresetManagerView: View {
     private func messageCard(_ text: String) -> some View {
         AppCard {
             Text(text)
-                .font(.system(size: 14, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(messageTone.nativeColor)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -235,7 +244,7 @@ struct PresetManagerView: View {
     private func reportCard(_ report: TweakImportReport) -> some View {
         AppCard {
             VStack(alignment: .leading, spacing: 8) {
-                AppCardHeader(icon: "checkmark.circle", title: "Load result")
+                AppCardHeader(icon: "checkmark.circle", title: "Kết quả tải")
                 ForEach(Array(report.logLines.enumerated()), id: \.offset) { _, line in
                     Text(line)
                         .font(.system(size: 11, design: .monospaced))
@@ -273,7 +282,7 @@ struct PresetManagerView: View {
     private func saveCurrent() {
         let name = newName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            setMessage("Enter a name for this preset.", .warning)
+            setMessage("Nhập tên preset.", .warning)
             return
         }
         let ok = GoldenNuggetPresets.save(name,
@@ -282,13 +291,13 @@ struct PresetManagerView: View {
                                           iosVersion: identity.version,
                                           description: newDescription)
         guard ok else {
-            setMessage("Failed to save the preset.", .error)
+            setMessage("Lưu preset thất bại.", .error)
             return
         }
         let stored = GoldenNuggetPresets.sanitize(name)
         do { try CommunityTemplateStore.shared.saveSelection(in: stored) }
         catch { setMessage(error.localizedDescription, .error); return }
-        setMessage("Preset \"\(stored)\" saved.", .success)
+        setMessage("Đã lưu preset \"\(stored)\".", .success)
         newName = ""
         newDescription = ""
         refresh()
@@ -297,17 +306,17 @@ struct PresetManagerView: View {
 
     private func requestLoad() {
         guard let info = selected else {
-            setMessage("Select a preset first.", .warning)
+            setMessage("Chọn preset trước.", .warning)
             return
         }
         confirmLoad = info
     }
 
     private func loadConfirmMessage(_ info: GoldenNuggetPresets.PresetInfo) -> String {
-        var text = "Load preset \"\(info.name)\"?"
-        if !info.description.isEmpty { text += "\n\nDescription: \(info.description)" }
-        text += "\nDevice: \(info.deviceModel) • iOS \(info.iosVersion)"
-        text += "\n\nThis will replace your current configuration."
+        var text = "Tải preset \"\(info.name)\"?"
+        if !info.description.isEmpty { text += "\n\nMô tả: \(info.description)" }
+        text += "\nThiết bị: \(info.deviceModel) • iOS \(info.iosVersion)"
+        text += "\n\nSẽ thay thế cấu hình hiện tại."
         if let warning = daemonCompatibilityWarning(info) {
             text += "\n\n⚠ \(warning)"
         }
@@ -319,31 +328,30 @@ struct PresetManagerView: View {
         var mismatches: [String] = []
         if let saved = majorVersion(info.iosVersion),
            let current = majorVersion(identity.version), saved != current {
-            mismatches.append("iOS \(saved)x vs current iOS \(current)x")
+            mismatches.append("iOS \(saved)x vs hiện tại iOS \(current)x")
         }
         let savedType = deviceType(info.deviceModel)
         let currentType = deviceType(identity.productType)
         if !savedType.isEmpty && !currentType.isEmpty && savedType != currentType {
-            mismatches.append("\(savedType) vs current \(currentType)")
+            mismatches.append("\(savedType) vs hiện tại \(currentType)")
         }
         guard !mismatches.isEmpty else { return nil }
-        return "This preset contains daemon modifications that were saved for a different device:\n"
+        return "Preset chứa sửa daemon lưu cho thiết bị khác:\n"
             + mismatches.map { "• \($0)" }.joined(separator: "\n")
-            + "\n\nDaemons are sensitive to the iOS version and device type, and "
-            + "applying incompatible ones can bootloop your device. Proceed with caution."
+            + "\n\nDaemon nhạy với phiên bản iOS và loại thiết bị, áp không tương thích có thể bootloop. Thận trọng."
     }
 
     private func performLoad(_ info: GoldenNuggetPresets.PresetInfo) {
         guard let preset = GoldenNuggetPresets.load(info.name) else {
-            setMessage("Failed to load the preset.", .error)
+            setMessage("Tải preset thất bại.", .error)
             return
         }
-        apply(preset, label: "Preset \"\(info.name)\" loaded.")
+        apply(preset, label: "Đã tải preset \"\(info.name)\".")
     }
 
     private func requestRollback() {
         guard GoldenNuggetPresets.hasRollback else {
-            setMessage("There is no previous successful apply to roll back yet.", .warning)
+            setMessage("Chưa có lần Apply thành công để rollback.", .warning)
             return
         }
         confirmRollback = true
@@ -351,10 +359,10 @@ struct PresetManagerView: View {
 
     private func performRollback() {
         guard let preset = GoldenNuggetPresets.loadRollback() else {
-            setMessage("There is no previous successful apply to roll back yet.", .warning)
+            setMessage("Chưa có lần Apply thành công để rollback.", .warning)
             return
         }
-        apply(preset, label: "Rolled back to the previous applied state.")
+        apply(preset, label: "Đã rollback về trạng thái Apply trước.")
     }
 
     private func apply(_ preset: GoldenNuggetPreset, label: String) {
@@ -382,32 +390,32 @@ struct PresetManagerView: View {
 
     private func export(include: Set<String>?) {
         guard let info = selected else {
-            setMessage("Select a preset first.", .warning)
+            setMessage("Chọn preset trước.", .warning)
             return
         }
         guard let data = GoldenNuggetPresets.exportData(for: info.name, include: include) else {
-            setMessage("Failed to export preset.", .error)
+            setMessage("Xuất preset thất bại.", .error)
             return
         }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(GoldenNuggetPresets.sanitize(info.name)).gnpreset")
         do {
-            guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw CommunityError("Invalid preset.") }
+            guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw CommunityError("Preset không hợp lệ.") }
             try PortablePreset.export(document, to: url)
             share = ShareItem(url: url)
         } catch {
-            setMessage("Failed to export preset: \(error.localizedDescription)", .error)
+            setMessage("Xuất preset thất bại: \(error.localizedDescription)", .error)
         }
     }
 
     private func requestPartialExport() {
         guard let info = selected else {
-            setMessage("Select a preset first.", .warning)
+            setMessage("Chọn preset trước.", .warning)
             return
         }
         let ids = GoldenNuggetPresets.tweakIDs(for: info.name)
         guard !ids.isEmpty else {
-            setMessage("This preset has no tweaks to export.", .warning)
+            setMessage("Preset không có tinh chỉnh để xuất.", .warning)
             return
         }
         partialExport = PartialExportTarget(info: info, ids: ids)
@@ -415,11 +423,11 @@ struct PresetManagerView: View {
 
     private func performDelete(_ info: GoldenNuggetPresets.PresetInfo) {
         guard GoldenNuggetPresets.delete(info.name) else {
-            setMessage("Failed to delete the preset.", .error)
+            setMessage("Xoá preset thất bại.", .error)
             return
         }
         if selectedName == info.name { selectedName = nil }
-        setMessage("Preset \"\(info.name)\" deleted.", .success)
+        setMessage("Đã xoá preset \"\(info.name)\".", .success)
         refresh()
     }
 
@@ -430,9 +438,9 @@ struct PresetManagerView: View {
         if ok {
             refresh()
             selectedName = result
-            setMessage("Preset \"\(result)\" imported successfully.", .success)
+            setMessage("Đã nhập preset \"\(result)\".", .success)
         } else {
-            setMessage("Failed to import preset: \(result)", .error)
+            setMessage("Nhập preset thất bại: \(result)", .error)
         }
     }
 
@@ -475,19 +483,16 @@ private struct ShareItem: Identifiable {
 
 private struct ShareSheet: View {
     let url: URL
-
     var body: some View {
         VStack(spacing: 16) {
             ShareLink(item: url) {
-                Label("Save or share preset", systemImage: "square.and.arrow.up")
-                    .font(.system(size: 16, weight: .semibold))
+                Label("Lưu hoặc chia sẻ preset", systemImage: "square.and.arrow.up")
+                    .font(.callout.weight(.semibold))
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .tint(AppPalette.accent)
             .controlSize(.large)
-            Text(url.lastPathComponent)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+            Text(url.lastPathComponent).font(.footnote).foregroundStyle(.secondary)
         }
         .padding(24)
         .presentationDetents([.height(200)])
@@ -504,7 +509,6 @@ private struct PartialExportSheet: View {
     let target: PartialExportTarget
     let onExport: (Set<String>) -> Void
     let onCancel: () -> Void
-
     @State private var chosen: Set<String>
 
     init(target: PartialExportTarget,
@@ -535,22 +539,22 @@ private struct PartialExportSheet: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    Text("Tweaks to include (\(chosen.count)/\(target.ids.count))")
+                    Text("Tinh chỉnh cần bao gồm (\(chosen.count)/\(target.ids.count))")
                 }
             }
-            .appThemedList()
-            .navigationTitle("Partial Export")
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .tint(AppPalette.accent)
+            .navigationTitle("Xuất một phần")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onCancel() }
+                    Button("Huỷ") { onCancel() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Export") { onExport(chosen) }
-                        .disabled(chosen.isEmpty)
+                    Button("Xuất") { onExport(chosen) }.disabled(chosen.isEmpty)
                 }
             }
         }
-        .tint(AppPalette.accent)
     }
 }
